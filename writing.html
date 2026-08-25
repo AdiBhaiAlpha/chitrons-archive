@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writing by Chitron Bhattacharjee | Chitrons Archive</title>
+  <meta name="description" content="Articles, essays, tutorials and reflections by Chitron Bhattacharjee — AI developer and programmer from Bangladesh.">
+  <link rel="canonical" href="https://USERNAME.github.io/REPOSITORY/writing.html">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Chitron Bhattacharjee">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Writing by Chitron Bhattacharjee | Chitrons Archive">
+  <meta property="og:description" content="Articles, essays, tutorials and reflections by Chitron Bhattacharjee.">
+  <meta property="og:url" content="https://USERNAME.github.io/REPOSITORY/writing.html">
+  <meta property="og:site_name" content="Chitrons Archive">
+  <meta property="og:locale" content="en_US">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Writing | Chitrons Archive">
+  <meta name="twitter:description" content="Articles, essays, tutorials and reflections by Chitron Bhattacharjee.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Writing by Chitron Bhattacharjee",
+    "description": "Articles, essays, tutorials and reflections by Chitron Bhattacharjee — AI developer and programmer from Bangladesh.",
+    "url": "https://USERNAME.github.io/REPOSITORY/writing.html",
+    "author": {
+      "@type": "Person",
+      "name": "Chitron Bhattacharjee",
+      "url": "https://USERNAME.github.io/REPOSITORY/about.html"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://USERNAME.github.io/REPOSITORY/" },
+      { "@type": "ListItem", "position": 2, "name": "Writing", "item": "https://USERNAME.github.io/REPOSITORY/writing.html" }
+    ]
+  }
+  </script>
+
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="./" class="site-logo">Chitrons Archive</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="./">Home</a>
+        <a href="./about.html">About</a>
+        <a href="./writing.html" class="active">Writing</a>
+      </nav>
+      <div class="nav-right">
+        <button class="theme-toggle" aria-label="Switch to dark mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="mobile-menu-btn" aria-label="Open menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mobile-nav" aria-hidden="true">
+    <div class="mobile-nav-header">
+      <a href="./" class="site-logo">Chitrons Archive</a>
+      <button class="mobile-nav-close" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <nav aria-label="Mobile navigation">
+      <a href="./">Home</a>
+      <a href="./about.html">About</a>
+      <a href="./writing.html" class="active">Writing</a>
+    </nav>
+  </div>
+
+  <main>
+    <section class="section container container--narrow">
+      <h1 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:24px">Writing</h1>
+
+      <div class="writing-controls">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" id="search-input" placeholder="Search articles..." aria-label="Search articles">
+        </div>
+        <select id="category-filter" class="sort-select" aria-label="Filter by category">
+          <option value="">All categories</option>
+        </select>
+        <select id="sort-select" class="sort-select" aria-label="Sort articles">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+
+      <div id="posts-container" class="post-list">
+        <div class="loading">Loading articles...</div>
+      </div>
+
+      <nav id="pagination" class="pagination" aria-label="Pagination"></nav>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container container--narrow">
+      <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
+      <div class="footer-links">
+        <a href="./">Home</a>
+        <a href="./about.html">About</a>
+        <a href="./writing.html">Writing</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/main.js"></script>
+  <script src="./js/writing.js"></script>
+</body>
+</html>

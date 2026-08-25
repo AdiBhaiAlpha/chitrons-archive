@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Article | Chitrons Archive</title>
+  <meta name="description" content="">
+  <link rel="canonical" href="">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Chitron Bhattacharjee">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="">
+  <meta property="og:description" content="">
+  <meta property="og:url" content="">
+  <meta property="og:site_name" content="Chitrons Archive">
+  <meta property="og:locale" content="en_US">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="">
+  <meta name="twitter:description" content="">
+
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="./" class="site-logo">Chitrons Archive</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="./">Home</a>
+        <a href="./about.html">About</a>
+        <a href="./writing.html" class="active">Writing</a>
+      </nav>
+      <div class="nav-right">
+        <button class="theme-toggle" aria-label="Switch to dark mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="mobile-menu-btn" aria-label="Open menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mobile-nav" aria-hidden="true">
+    <div class="mobile-nav-header">
+      <a href="./" class="site-logo">Chitrons Archive</a>
+      <button class="mobile-nav-close" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <nav aria-label="Mobile navigation">
+      <a href="./">Home</a>
+      <a href="./about.html">About</a>
+      <a href="./writing.html">Writing</a>
+    </nav>
+  </div>
+
+  <main>
+    <article>
+      <header class="article-header container container--narrow">
+        <a href="./writing.html" class="back-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back to Writing
+        </a>
+        <div class="article-meta">
+          <span class="category" id="article-category"></span>
+          <span class="dot" aria-hidden="true">&middot;</span>
+          <span id="article-date"></span>
+          <span class="dot" aria-hidden="true">&middot;</span>
+          <span id="article-reading-time"></span>
+          <span class="dot" aria-hidden="true">&middot;</span>
+          <a href="./about.html" style="color:var(--text-secondary)">Chitron Bhattacharjee</a>
+        </div>
+        <h1 class="article-title" id="article-title"></h1>
+        <p class="article-excerpt" id="article-excerpt"></p>
+        <div class="article-tags" id="article-tags"></div>
+      </header>
+
+      <div class="article-body container container--narrow" id="article-body">
+        <div class="loading">Loading article...</div>
+      </div>
+
+      <nav id="post-nav" class="post-nav container container--narrow" aria-label="Article navigation"></nav>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container container--narrow">
+      <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
+      <div class="footer-links">
+        <a href="./">Home</a>
+        <a href="./about.html">About</a>
+        <a href="./writing.html">Writing</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/main.js"></script>
+  <script src="./js/post.js"></script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin | Chitrons Archive</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+</head>
+<body>
+
+  <!-- LOGIN -->
+  <div id="login-view" class="login-page">
+    <div class="login-card">
+      <h1>Chitrons Archive</h1>
+      <p class="subtitle">Admin</p>
+      <form id="login-form">
+        <label for="pin-input">Enter PIN</label>
+        <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+      </form>
+      <div class="login-error" id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN APP -->
+  <div id="admin-app" class="admin-layout" style="display:none">
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <div class="sidebar-header">
+        <a href="../" class="site-logo">Chitrons Archive</a>
+        <div class="admin-label">Admin Panel</div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-section">
+          <button class="sidebar-link active" data-view="dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </button>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Content</div>
+          <button class="sidebar-link" data-view="posts" data-filter="">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            All Posts
+          </button>
+          <button class="sidebar-link" data-view="posts" data-filter="published">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Published
+          </button>
+          <button class="sidebar-link" data-view="posts" data-filter="draft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Drafts
+          </button>
+          <button class="sidebar-link" data-view="posts" data-filter="scheduled">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Scheduled
+          </button>
+          <button class="sidebar-link" data-view="posts" data-filter="trashed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Trash
+          </button>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Manage</div>
+          <button class="sidebar-link" data-view="labels">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            Labels
+          </button>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost btn-sm" id="logout-btn">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="admin-main">
+      <div class="admin-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="sidebar-toggle" aria-label="Open sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <span class="topbar-title" id="topbar-title">Dashboard</span>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="admin-search" placeholder="Search..." aria-label="Search posts">
+          </div>
+          <button class="btn btn-primary btn-sm" id="new-post-btn">+ New Post</button>
+          <a href="../" target="_blank" class="btn btn-secondary btn-sm">Preview Site</a>
+        </div>
+      </div>
+
+      <div class="admin-content">
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard" class="admin-view">
+          <div class="dash-stats" id="dash-stats">
+            <div class="dash-stat"><div class="number" id="stat-total">-</div><div class="label">Total Posts</div></div>
+            <div class="dash-stat"><div class="number" id="stat-published">-</div><div class="label">Published</div></div>
+            <div class="dash-stat"><div class="number" id="stat-drafts">-</div><div class="label">Drafts</div></div>
+            <div class="dash-stat"><div class="number" id="stat-scheduled">-</div><div class="label">Scheduled</div></div>
+          </div>
+          <div class="dash-section">
+            <h3>Recent Posts</h3>
+            <div id="dash-recent" class="post-list"></div>
+          </div>
+        </div>
+
+        <!-- POSTS LIST VIEW -->
+        <div id="view-posts" class="admin-view" style="display:none">
+          <div class="bulk-bar" id="bulk-bar">
+            <span id="bulk-count">0 selected</span>
+            <select id="bulk-action">
+              <option value="">Bulk actions</option>
+              <option value="publish">Publish</option>
+              <option value="unpublish">Unpublish</option>
+              <option value="trash">Move to Trash</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" id="bulk-apply">Apply</button>
+          </div>
+          <div class="post-table-wrapper">
+            <table class="post-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" class="admin-checkbox" id="select-all" aria-label="Select all"></th>
+                  <th>Title</th>
+                  <th class="hide-mobile">Status</th>
+                  <th class="hide-mobile">Labels</th>
+                  <th class="hide-mobile">Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="posts-tbody"></tbody>
+            </table>
+          </div>
+          <div id="posts-pagination" class="pagination" style="margin-top:20px"></div>
+        </div>
+
+        <!-- EDITOR VIEW -->
+        <div id="view-editor" class="admin-view" style="display:none">
+          <div class="editor-layout">
+            <div class="editor-main">
+              <input type="text" class="editor-title-input" id="editor-title" placeholder="Post title" aria-label="Post title">
+              <div class="editor-toolbar" id="editor-toolbar">
+                <button class="toolbar-btn" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></button>
+                <button class="toolbar-btn" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+                <button class="toolbar-btn" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg></button>
+                <button class="toolbar-btn" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.3 4.9c-2.3-.6-4.4-1-6.2-.9-2.7 0-5.3.7-5.3 3.6 0 1.5 1.1 2.5 3.2 3.1"/><line x1="4" y1="12" x2="20" y2="12"/><path d="M15.7 13.3c1.3.5 2.3 1.3 2.3 3.1 0 3-3.1 3.6-6.5 3.6-1.7 0-3.7-.3-5.5-1"/></svg></button>
+                <div class="toolbar-sep"></div>
+                <button class="toolbar-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2" aria-label="Heading 2"><strong>H2</strong></button>
+                <button class="toolbar-btn" data-cmd="formatBlock" data-val="h3" title="Heading 3" aria-label="Heading 3"><strong>H3</strong></button>
+                <button class="toolbar-btn" data-cmd="formatBlock" data-val="p" title="Paragraph" aria-label="Paragraph">P</button>
+                <div class="toolbar-sep"></div>
+                <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Unordered list" aria-label="Unordered list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1" fill="currentColor"/><circle cx="3.5" cy="12" r="1" fill="currentColor"/><circle cx="3.5" cy="18" r="1" fill="currentColor"/></svg></button>
+                <button class="toolbar-btn" data-cmd="insertOrderedList" title="Ordered list" aria-label="Ordered list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="2" y="8" font-size="7" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="2" y="14" font-size="7" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="2" y="20" font-size="7" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg></button>
+                <button class="toolbar-btn" data-cmd="formatBlock" data-val="blockquote" title="Blockquote" aria-label="Blockquote"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg></button>
+                <div class="toolbar-sep"></div>
+                <button class="toolbar-btn" data-cmd="createLink" title="Insert link (Ctrl+K)" aria-label="Insert link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+                <button class="toolbar-btn" data-cmd="insertImage" title="Insert image" aria-label="Insert image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>
+                <button class="toolbar-btn" data-cmd="insertHTML" data-val="<hr>" title="Horizontal rule" aria-label="Horizontal rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="12" x2="22" y2="12"/></svg></button>
+                <button class="toolbar-btn" data-cmd="insertHTML" data-val='<pre><code>// code</code></pre>' title="Code block" aria-label="Code block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                <div class="toolbar-sep"></div>
+                <button class="toolbar-btn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button class="toolbar-btn" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
+                <button class="toolbar-btn" data-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg></button>
+              </div>
+              <div class="editor-area" id="editor-content" contenteditable="true" aria-label="Post content"></div>
+              <div class="editor-actions">
+                <div class="autosave-status" id="autosave-status">
+                  <span class="dot"></span>
+                  <span class="text">Ready</span>
+                </div>
+                <div class="spacer"></div>
+                <button class="btn btn-ghost btn-sm" id="editor-discard">Discard</button>
+                <button class="btn btn-secondary btn-sm" id="editor-save-draft">Save Draft</button>
+                <button class="btn btn-secondary btn-sm" id="editor-preview" disabled>Preview</button>
+                <button class="btn btn-primary btn-sm" id="editor-publish">Publish</button>
+              </div>
+            </div>
+
+            <div class="editor-sidebar">
+              <div class="editor-card">
+                <div class="editor-card-header">Post Settings</div>
+                <div class="editor-card-body">
+                  <div class="field">
+                    <label for="editor-slug">Slug</label>
+                    <input type="text" id="editor-slug" placeholder="auto-generated">
+                    <div class="help">Leave blank to auto-generate from title</div>
+                  </div>
+                  <div class="field">
+                    <label for="editor-excerpt">Excerpt</label>
+                    <textarea id="editor-excerpt" rows="3" placeholder="Brief description of this post"></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="editor-cover">Cover Image URL</label>
+                    <input type="url" id="editor-cover" placeholder="https://...">
+                  </div>
+                  <div class="field">
+                    <label for="editor-category">Category</label>
+                    <input type="text" id="editor-category" placeholder="e.g. technology" list="category-list">
+                    <datalist id="category-list"></datalist>
+                  </div>
+                  <div class="field">
+                    <label>Labels / Tags</label>
+                    <div class="tags-input" id="tags-input">
+                      <input type="text" id="tag-input" placeholder="Add label...">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <div class="editor-card-header">SEO</div>
+                <div class="editor-card-body">
+                  <div class="field">
+                    <label for="editor-seo-title">SEO Title</label>
+                    <input type="text" id="editor-seo-title" placeholder="Override page title">
+                  </div>
+                  <div class="field">
+                    <label for="editor-seo-desc">SEO Description</label>
+                    <textarea id="editor-seo-desc" rows="2" placeholder="Meta description"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <div class="editor-card-header">Schedule</div>
+                <div class="editor-card-body">
+                  <div class="field">
+                    <label for="editor-schedule-date">Schedule publish</label>
+                    <input type="datetime-local" id="editor-schedule-date">
+                    <div class="help">Leave empty to publish immediately</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <div class="editor-card-header">Revisions</div>
+                <div class="editor-card-body">
+                  <div id="revisions-list" style="font-size:13px;color:var(--text-secondary)">No revisions yet.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LABELS VIEW -->
+        <div id="view-labels" class="admin-view" style="display:none">
+          <h2 style="font-size:18px;font-weight:600;margin-bottom:16px">Labels</h2>
+          <div style="display:flex;gap:8px;margin-bottom:20px">
+            <input type="text" id="new-label-input" placeholder="New label name" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;flex:1;max-width:300px;background:var(--bg)">
+            <button class="btn btn-primary btn-sm" id="add-label-btn">Add</button>
+          </div>
+          <div id="labels-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" id="modal">
+      <h3 id="modal-title">Confirm</h3>
+      <p id="modal-body">Are you sure?</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="modal-cancel">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/main.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

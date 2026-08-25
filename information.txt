@@ -1,0 +1,316 @@
+CHITRONS ARCHIVE — INFORMATION SOURCE
+File: information.txt
+Purpose: This file is the authoritative content source for generating the About page of Chitrons Archive.
+
+IMPORTANT CONTENT RULES
+- Use this file as the primary source for the About page.
+- Do not invent facts, achievements, employers, education, projects, awards, links, dates, or skills.
+- If a fact is marked "VERIFY", do not present it as certain.
+- Do not expose private credentials, passwords, API keys, database URLs, phone numbers, home addresses, family details, medical information, relationship history, or other sensitive personal information on the public About page.
+- The About page should present the person professionally, not as a complete private biography.
+- Prefer first-person wording where appropriate, but keep the tone natural and understated.
+- Do not make exaggerated claims such as "best", "world-class", "genius", "expert" unless explicitly supported.
+- The final About page should feel like a real personal website, not an AI-generated biography.
+
+IDENTITY
+Full name: Chitron Bhattacharjee
+Bengali name: চিত্রণ ভট্টাচার্য
+Alternative name/nickname: Adi / আদি
+Other spelling seen publicly: Chitron Bhattacharya
+Country: Bangladesh
+Primary language/content language: Bengali
+Professional focus: AI development, programming, web development, bot development, UI/UX and cybersecurity-related work.
+Current public-facing positioning: AI developer, programmer, student, writer/creative technologist.
+
+PUBLIC PROFILE SUMMARY
+Chitron Bhattacharjee is a Bangladeshi AI developer and programmer with interests spanning artificial intelligence, software development, web technologies, automation, bot development, digital security, design, and writing.
+
+He combines technical work with creative interests. His work includes AI and chatbot projects, web applications, programming experiments, digital products, and personal writing.
+
+He is interested in building practical technology rather than treating programming as only an academic subject. His projects often combine software, AI, interface design, automation, and communication.
+
+EDUCATION
+Institution: Mymensingh College, Bangladesh
+Academic stream: Science
+Current academic status: Student
+
+NOTE:
+Older public sources describe Chitron as an eleventh-grade science student, while other sources describe him as being in higher secondary education. Do not put a specific current class/year on the public About page unless it is confirmed from the latest information.
+
+TECHNICAL INTERESTS
+- Artificial intelligence
+- Generative AI
+- Large language model applications
+- Chatbots
+- JavaScript
+- Node.js
+- HTML
+- CSS
+- PHP
+- Full-stack web development
+- UI/UX design
+- Web applications
+- Android/web app development
+- Bot development
+- API integration
+- MongoDB
+- Firebase
+- Git/GitHub
+- Cloud deployment
+- Serverless architecture
+- Cybersecurity and digital security
+- Automation
+- Prompt engineering
+- AI-assisted software development
+
+KNOWN PROJECTS AND PRODUCTS
+
+1. ShiPu AI
+ShiPu AI is one of Chitron's major long-running AI projects.
+It is described as a Bengali-focused AI/chatbot project designed around conversational interaction.
+
+Known characteristics from public/project information:
+- Bengali conversational experience
+- AI chatbot functionality
+- Node.js-based development
+- LLM integration
+- conversational personality
+- experimental AI features
+- multiple iterations/versions
+
+The project has also been associated with names such as:
+- ShiPu Bot
+- ShiPu Ai
+- ShiPu Ai Mirai Bot
+- Lume
+- Lume V2
+
+IMPORTANT:
+Do not claim that ShiPu AI is a proprietary foundation model trained entirely from scratch unless that is explicitly confirmed. Describe it as an AI/chatbot/AI product project.
+
+2. Oii Shunoo
+Oii Shunoo is a social-media and gaming-oriented application/project developed by Chitron.
+
+Concept:
+- social interaction
+- community features
+- gaming
+- hybrid social/gaming experience
+
+Public information indicates that development/work on the project was later paused. Do not describe it as an actively maintained product unless confirmed.
+
+3. Chitron Archive / Chitrons Archive
+Chitrons Archive is intended to be Chitron's personal digital archive.
+
+Purpose:
+- personal identity
+- About page
+- writing/blog archive
+- technical notes
+- ideas
+- projects
+- personal digital record
+
+The new version should be presented as a minimalist personal website and writing archive.
+
+4. Bot Development
+Chitron has worked extensively with chatbots and messaging bots, including Node.js/JavaScript-based bot projects.
+
+Known ecosystem/project references include:
+- GoatBot
+- ShiPu Bot
+- ShiPu AI
+- AI chatbot integrations
+- messaging automation
+- command systems
+- bot databases
+- API integrations
+
+5. Black Hunter Team
+Public profiles associate Chitron with Black Hunter Team and describe it as a cybersecurity/AI development team.
+
+For the About page, describe this conservatively as involvement/work associated with a technology/cybersecurity team unless a current official role is confirmed.
+
+6. LumeTech
+Project/business references include LumeTech Co. Ltd. and Lume-related AI work.
+
+Do not invent a formal employment title unless confirmed.
+
+7. Chitron's Apps / Digital Projects
+Chitron has worked on multiple experimental web, AI, bot, mobile, and digital projects. The About page can describe this as a portfolio of independent projects rather than presenting every experiment as a commercial product.
+
+DEVELOPMENT EXPERIENCE
+Chitron works across frontend and backend development.
+
+Frontend interests:
+- semantic HTML
+- CSS
+- responsive design
+- UI/UX
+- JavaScript
+- modern web interfaces
+- mobile-friendly interfaces
+
+Backend interests:
+- Node.js
+- Express
+- PHP
+- REST APIs
+- MongoDB
+- Firebase
+- authentication
+- sessions
+- databases
+- server-side logic
+
+Deployment/DevOps interests:
+- GitHub
+- GitHub Pages
+- Render
+- cPanel
+- FTP/SFTP
+- Node.js hosting
+- environment variables
+- serverless/API architectures
+
+DESIGN PHILOSOPHY
+Chitron prefers:
+- minimalist interfaces
+- professional UI
+- strong typography
+- practical usability
+- responsive design
+- clean layouts
+- modern mobile-inspired interfaces
+- Samsung One UI-inspired usability patterns in some projects
+- thoughtful spacing
+- simple but polished visual systems
+
+He is particularly interested in making interfaces feel human-designed rather than generic AI-generated templates.
+
+WRITING AND CREATIVE WORK
+Technology is not Chitron's only interest.
+
+He writes:
+- poems
+- stories
+- essays/opinion pieces
+- reflective writing
+- social commentary
+- technology-related writing
+
+His writing often explores:
+- human emotions
+- technology
+- society
+- politics and social questions
+- personal experiences
+- relationships between people and technology
+- ideas about a more humane use of technology
+
+Public writing profiles indicate that some of his writing has been published or shared on Bengali poetry/writing platforms and personal blogs.
+
+WRITING STYLE FOR ABOUT PAGE
+The About page should not list every poem or personal experience.
+
+Instead, summarize the creative side as:
+"Alongside technology, Chitron writes poetry, stories and reflective pieces, using writing as another way to explore people, society, ideas and emotion."
+
+PERSONAL WORKING PHILOSOPHY
+Themes that can safely inform the About page:
+- learning by building
+- experimenting with new technology
+- combining technical and creative work
+- making technology useful and human-centered
+- continuously improving through mistakes and iteration
+- curiosity about AI and digital systems
+- interest in creating things rather than only consuming them
+
+POSSIBLE ABOUT-PAGE POSITIONING
+Use a concise identity such as:
+
+"AI developer, programmer, designer and writer from Bangladesh."
+
+Or:
+
+"I'm Chitron Bhattacharjee, an AI developer and programmer from Bangladesh. I build software, experiment with AI, design digital experiences, and write about the things I find worth thinking about."
+
+Do not use both repeatedly. Pick the strongest version based on the site's design.
+
+PUBLIC LINKS / IDENTIFIERS
+Known public identity references include:
+- GitHub: AdiBhaiAlpha
+- Bio/profile: chitron.bio.link
+- Public blog/profile references using Chitron Bhattacharjee / Chitron / Adi
+- Gravatar profile associated with Chitron Bhattacharjee
+- LinkedIn profile associated with Chitron Bhattacharjee and Mymensingh College
+
+IMPORTANT:
+Only place links on the website when the final URLs are explicitly confirmed. Do not invent URLs.
+
+CONTACT
+A public email address has appeared in Chitron's public profiles:
+chitronbhattacharjee@gmail.com
+
+Only publish this email if Chitron intentionally wants a public contact email on the new site.
+
+LOCATION
+Public profiles associate Chitron with Bangladesh, including Mymensingh and Durgapur/Netrokona.
+
+For the About page, use only:
+"Bangladesh"
+or
+"Mymensingh, Bangladesh"
+if a location is desired.
+
+Do not publish a precise residential address.
+
+PUBLIC BIOGRAPHICAL INFORMATION
+Some public sources state:
+- Birth date: 13 October 2005
+- Birthplace: Durgapur, Netrokona, Bangladesh
+
+These details should only be displayed if Chitron explicitly wants them on the About page. They are not necessary for a professional personal site.
+
+DO NOT USE ON PUBLIC ABOUT PAGE
+Never automatically include:
+- family members' names
+- family members' ages
+- phone numbers
+- home address
+- private relationship history
+- medical/health information
+- private financial information
+- passwords/PINs
+- MongoDB URI
+- API keys
+- authentication secrets
+- private conversations
+- private account identifiers
+- private deployment credentials
+
+CURRENT WEBSITE GOAL
+The About page should answer four questions quickly:
+
+1. Who is Chitron?
+2. What does he build?
+3. What does he write about?
+4. What is he interested in exploring next?
+
+The result should be concise enough to read comfortably but detailed enough to establish a real identity.
+
+FINAL TONE
+- personal
+- intelligent
+- calm
+- confident
+- understated
+- human
+- technically credible
+- not corporate
+- not exaggerated
+- not overly poetic
+- not generic AI copy
+
+SOURCE NOTE
+This information file consolidates known project/context information and publicly available profile information. Some older public sources contain outdated or conflicting details. When information conflicts, prefer the latest confirmed information and do not state uncertain details as fact.

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Chitrons Archive</title>
+    <link>https://USERNAME.github.io/REPOSITORY/</link>
+    <description>Notes, ideas, experiments and things worth remembering — by Chitron Bhattacharjee.</description>
+    <language>en</language>
+    <lastBuildDate>Thu, 01 Jan 2025 00:00:00 GMT</lastBuildDate>
+    <atom:link href="https://USERNAME.github.io/REPOSITORY/feed.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Welcome to Chitrons Archive</title>
+      <link>https://USERNAME.github.io/REPOSITORY/writing.html</link>
+      <description>The archive is live. More writing coming soon.</description>
+      <pubDate>Thu, 01 Jan 2025 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
