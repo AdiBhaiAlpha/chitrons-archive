@@ -385,7 +385,7 @@
 
   async function loadLabels() {
     try {
-      const data = await API.getLabels();
+      const data = await API.adminGetLabels();
       labelsCache = data.labels || [];
       renderLabels();
     } catch (e) {}
@@ -453,6 +453,8 @@
       $('#about-current').value = p.currentFocus || '';
       $('#about-writing-text').value = p.writingSection || '';
       $('#about-contact-links').value = (p.contactLinks || []).map(l => l.name + ' - ' + l.url).join('\n');
+      $('#about-image-alt').value = p.imageAlt || '';
+      $('#about-projects').value = (p.projects || []).map(p => p.title + ' - ' + p.description + (p.tech ? ' - ' + p.tech : '')).join('\n');
     } catch (e) { toast('Failed to load about', 'error'); }
   }
 
@@ -463,11 +465,17 @@
         const parts = line.split(' - ');
         return { name: (parts[0] || '').trim(), url: (parts[1] || '').trim() };
       });
+      const projectLines = $('#about-projects').value.trim().split('\n').filter(Boolean);
+      const projects = projectLines.map(line => {
+        const parts = line.split(' - ');
+        return { title: (parts[0] || '').trim(), description: (parts[1] || '').trim(), tech: (parts[2] || '').trim() };
+      });
       await API.adminSaveAbout({
         name: $('#about-name').value.trim(),
         headline: $('#about-headline').value.trim(),
         shortBio: $('#about-short-bio').value.trim(),
         profileImage: $('#about-profile-img').value.trim(),
+        imageAlt: $('#about-image-alt').value.trim(),
         biography: $('#about-biography').value.trim(),
         roles: $('#about-roles').value.trim().split('\n').filter(Boolean),
         skills: $('#about-skills').value.trim().split('\n').filter(Boolean),
@@ -475,7 +483,8 @@
         philosophy: $('#about-philosophy').value.trim(),
         currentFocus: $('#about-current').value.trim(),
         writingSection: $('#about-writing-text').value.trim(),
-        contactLinks
+        contactLinks,
+        projects
       });
       toast('About page saved', 'success');
     } catch (e) { toast('Failed to save about', 'error'); }

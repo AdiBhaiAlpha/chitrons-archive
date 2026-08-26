@@ -136,6 +136,14 @@ const API = (() => {
       return request('/api/admin/revisions/' + revisionId + '/restore', { method: 'POST' });
     },
 
+    async adminGetLabels() {
+      return request('/api/admin/labels');
+    },
+
+    async adminGetCategories() {
+      return request('/api/admin/categories');
+    },
+
     async adminGetStats() {
       return request('/api/admin/stats');
     },
