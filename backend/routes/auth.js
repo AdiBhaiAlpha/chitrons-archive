@@ -1,31 +1,53 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 
-const loginAttempts = new Map();
+const loginAttemptSchema = new mongoose.Schema({
+  ip: { type: String, index: true },
+  count: { type: Number, default: 0 },
+  start: { type: Date, default: Date.now }
+});
+const LoginAttempt = mongoose.models.LoginAttempt || mongoose.model('LoginAttempt', loginAttemptSchema);
+
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 
-function isRateLimited(ip) {
-  const record = loginAttempts.get(ip);
-  if (!record) return false;
-  if (Date.now() - record.start > WINDOW_MS) {
-    loginAttempts.delete(ip);
+async function isRateLimited(ip) {
+  try {
+    const record = await LoginAttempt.findOne({ ip });
+    if (!record) return false;
+    if (Date.now() - record.start.getTime() > WINDOW_MS) {
+      await LoginAttempt.deleteOne({ ip });
+      return false;
+    }
+    return record.count >= MAX_ATTEMPTS;
+  } catch (err) {
     return false;
   }
-  return record.count >= MAX_ATTEMPTS;
 }
 
-function recordAttempt(ip) {
-  const record = loginAttempts.get(ip) || { count: 0, start: Date.now() };
-  record.count++;
-  loginAttempts.set(ip, record);
+async function recordAttempt(ip) {
+  try {
+    const record = await LoginAttempt.findOne({ ip });
+    if (record && Date.now() - record.start.getTime() > WINDOW_MS) {
+      await LoginAttempt.deleteOne({ ip });
+      await LoginAttempt.create({ ip, count: 1, start: new Date() });
+    } else if (record) {
+      record.count++;
+      await record.save();
+    } else {
+      await LoginAttempt.create({ ip, count: 1, start: new Date() });
+    }
+  } catch (err) {
+    console.error('Rate limit record error:', err);
+  }
 }
 
-router.post('/login', (req, res) => {
-  const ip = req.ip;
+router.post('/login', async (req, res) => {
+  const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
   const { pin } = req.body;
 
-  if (isRateLimited(ip)) {
+  if (await isRateLimited(ip)) {
     return res.status(429).json({ error: 'Too many attempts. Try again later.' });
   }
 
@@ -35,11 +57,11 @@ router.post('/login', (req, res) => {
 
   if (String(pin) === String(process.env.ADMIN_PIN)) {
     req.session.isAdmin = true;
-    loginAttempts.delete(ip);
+    await LoginAttempt.deleteOne({ ip }).catch(() => {});
     return res.json({ success: true });
   }
 
-  recordAttempt(ip);
+  await recordAttempt(ip);
   return res.status(401).json({ error: 'Invalid PIN' });
 });
 

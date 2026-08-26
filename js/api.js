@@ -39,15 +39,15 @@ const API = (() => {
       if (page) p.set('page', page);
       if (limit) p.set('limit', limit);
       const q = p.toString();
-      return request(`/api/posts${q ? '?' + q : ''}`);
+      return request('/api/posts' + (q ? '?' + q : ''));
     },
 
     async getPost(slug) {
-      return request(`/api/posts/${encodeURIComponent(slug)}`);
+      return request('/api/posts/' + encodeURIComponent(slug));
     },
 
     async getNav(slug) {
-      return request(`/api/posts/nav/${encodeURIComponent(slug)}`);
+      return request('/api/posts/nav/' + encodeURIComponent(slug));
     },
 
     async getCategories() {
@@ -58,11 +58,20 @@ const API = (() => {
       return request('/api/posts/labels');
     },
 
+    async getSettings() {
+      return request('/api/content/settings');
+    },
+
+    async getHomepage() {
+      return request('/api/content/homepage');
+    },
+
+    async getAbout() {
+      return request('/api/content/about');
+    },
+
     async login(pin) {
-      return request('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ pin })
-      });
+      return request('/api/auth/login', { method: 'POST', body: JSON.stringify({ pin }) });
     },
 
     async logout() {
@@ -80,11 +89,11 @@ const API = (() => {
       if (page) p.set('page', page);
       if (limit) p.set('limit', limit);
       const q = p.toString();
-      return request(`/api/admin/posts${q ? '?' + q : ''}`);
+      return request('/api/admin/posts' + (q ? '?' + q : ''));
     },
 
     async adminGetPost(id) {
-      return request(`/api/admin/posts/${id}`);
+      return request('/api/admin/posts/' + id);
     },
 
     async adminCreatePost(data) {
@@ -92,43 +101,67 @@ const API = (() => {
     },
 
     async adminUpdatePost(id, data) {
-      return request(`/api/admin/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+      return request('/api/admin/posts/' + id, { method: 'PUT', body: JSON.stringify(data) });
     },
 
     async adminDeletePost(id) {
-      return request(`/api/admin/posts/${id}`, { method: 'DELETE' });
+      return request('/api/admin/posts/' + id, { method: 'DELETE' });
     },
 
     async adminPublishPost(id) {
-      return request(`/api/admin/posts/${id}/publish`, { method: 'POST' });
+      return request('/api/admin/posts/' + id + '/publish', { method: 'POST' });
     },
 
     async adminUnpublishPost(id) {
-      return request(`/api/admin/posts/${id}/unpublish`, { method: 'POST' });
+      return request('/api/admin/posts/' + id + '/unpublish', { method: 'POST' });
     },
 
     async adminRestorePost(id) {
-      return request(`/api/admin/posts/${id}/restore`, { method: 'POST' });
+      return request('/api/admin/posts/' + id + '/restore', { method: 'POST' });
     },
 
     async adminPermanentDelete(id) {
-      return request(`/api/admin/posts/${id}/permanent`, { method: 'DELETE' });
+      return request('/api/admin/posts/' + id + '/permanent', { method: 'DELETE' });
     },
 
     async adminDuplicatePost(id) {
-      return request(`/api/admin/posts/${id}/duplicate`, { method: 'POST' });
+      return request('/api/admin/posts/' + id + '/duplicate', { method: 'POST' });
     },
 
     async adminGetRevisions(postId) {
-      return request(`/api/admin/revisions/${postId}`);
+      return request('/api/admin/revisions/' + postId);
     },
 
     async adminRestoreRevision(revisionId) {
-      return request(`/api/admin/revisions/${revisionId}/restore`, { method: 'POST' });
+      return request('/api/admin/revisions/' + revisionId + '/restore', { method: 'POST' });
     },
 
     async adminGetStats() {
       return request('/api/admin/stats');
+    },
+
+    async adminGetSettings() {
+      return request('/api/admin/content/settings');
+    },
+
+    async adminSaveSettings(data) {
+      return request('/api/admin/content/settings', { method: 'PUT', body: JSON.stringify(data) });
+    },
+
+    async adminGetHomepage() {
+      return request('/api/admin/content/homepage');
+    },
+
+    async adminSaveHomepage(data) {
+      return request('/api/admin/content/homepage', { method: 'PUT', body: JSON.stringify(data) });
+    },
+
+    async adminGetAbout() {
+      return request('/api/admin/content/about');
+    },
+
+    async adminSaveAbout(data) {
+      return request('/api/admin/content/about', { method: 'PUT', body: JSON.stringify(data) });
     }
   };
 })();

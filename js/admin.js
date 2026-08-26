@@ -78,11 +78,14 @@
       ? $(`.sidebar-link[data-view="${view}"][data-filter="${filter || ''}"]`)
       : $(`.sidebar-link[data-view="${view}"]`);
     if (activeLink) activeLink.classList.add('active');
-    const titles = { dashboard: 'Dashboard', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels' };
+    const titles = { dashboard: 'Dashboard', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels', 'content-homepage': 'Homepage Content', 'content-about': 'About Content', 'content-settings': 'Site Settings' };
     $('#topbar-title').textContent = titles[view] || view;
     if (view === 'dashboard') loadDashboard();
     else if (view === 'posts') loadPostsList();
     else if (view === 'labels') loadLabels();
+    else if (view === 'content-homepage') loadHomepageEditor();
+    else if (view === 'content-about') loadAboutEditor();
+    else if (view === 'content-settings') loadSettingsEditor();
     closeSidebar();
   }
 
@@ -402,6 +405,123 @@
     });
   }
 
+  /* --- CMS Content Editors --- */
+  async function loadHomepageEditor() {
+    try {
+      const data = await API.adminGetHomepage();
+      const p = data.page;
+      if (!p) return;
+      $('#hp-hero-title').value = p.heroTitle || '';
+      $('#hp-hero-desc').value = p.heroDescription || '';
+      $('#hp-primary-text').value = p.primaryButtonText || '';
+      $('#hp-primary-link').value = p.primaryButtonLink || '';
+      $('#hp-secondary-text').value = p.secondaryButtonText || '';
+      $('#hp-secondary-link').value = p.secondaryButtonLink || '';
+      $('#hp-section-title').value = p.featuredSectionTitle || '';
+    } catch (e) { toast('Failed to load homepage', 'error'); }
+  }
+
+  async function saveHomepageEditor() {
+    try {
+      await API.adminSaveHomepage({
+        heroTitle: $('#hp-hero-title').value.trim(),
+        heroDescription: $('#hp-hero-desc').value.trim(),
+        primaryButtonText: $('#hp-primary-text').value.trim(),
+        primaryButtonLink: $('#hp-primary-link').value.trim(),
+        secondaryButtonText: $('#hp-secondary-text').value.trim(),
+        secondaryButtonLink: $('#hp-secondary-link').value.trim(),
+        featuredSectionTitle: $('#hp-section-title').value.trim()
+      });
+      toast('Homepage saved', 'success');
+    } catch (e) { toast('Failed to save homepage', 'error'); }
+  }
+
+  async function loadAboutEditor() {
+    try {
+      const data = await API.adminGetAbout();
+      const p = data.profile;
+      if (!p) return;
+      $('#about-name').value = p.name || '';
+      $('#about-headline').value = p.headline || '';
+      $('#about-short-bio').value = p.shortBio || '';
+      $('#about-profile-img').value = p.profileImage || '';
+      $('#about-biography').value = p.biography || '';
+      $('#about-roles').value = (p.roles || []).join('\n');
+      $('#about-skills').value = (p.skills || []).join('\n');
+      $('#about-interests').value = (p.interests || []).join('\n');
+      $('#about-philosophy').value = p.philosophy || '';
+      $('#about-current').value = p.currentFocus || '';
+      $('#about-writing-text').value = p.writingSection || '';
+      $('#about-contact-links').value = (p.contactLinks || []).map(l => l.name + ' - ' + l.url).join('\n');
+    } catch (e) { toast('Failed to load about', 'error'); }
+  }
+
+  async function saveAboutEditor() {
+    try {
+      const contactLines = $('#about-contact-links').value.trim().split('\n').filter(Boolean);
+      const contactLinks = contactLines.map(line => {
+        const parts = line.split(' - ');
+        return { name: (parts[0] || '').trim(), url: (parts[1] || '').trim() };
+      });
+      await API.adminSaveAbout({
+        name: $('#about-name').value.trim(),
+        headline: $('#about-headline').value.trim(),
+        shortBio: $('#about-short-bio').value.trim(),
+        profileImage: $('#about-profile-img').value.trim(),
+        biography: $('#about-biography').value.trim(),
+        roles: $('#about-roles').value.trim().split('\n').filter(Boolean),
+        skills: $('#about-skills').value.trim().split('\n').filter(Boolean),
+        interests: $('#about-interests').value.trim().split('\n').filter(Boolean),
+        philosophy: $('#about-philosophy').value.trim(),
+        currentFocus: $('#about-current').value.trim(),
+        writingSection: $('#about-writing-text').value.trim(),
+        contactLinks
+      });
+      toast('About page saved', 'success');
+    } catch (e) { toast('Failed to save about', 'error'); }
+  }
+
+  async function loadSettingsEditor() {
+    try {
+      const data = await API.adminGetSettings();
+      const s = data.settings;
+      if (!s) return;
+      $('#set-site-name').value = s.siteName || '';
+      $('#set-tagline').value = s.tagline || '';
+      $('#set-author-name').value = s.authorName || '';
+      $('#set-author-title').value = s.authorTitle || '';
+      $('#set-location').value = s.location || '';
+      $('#set-email').value = s.contactEmail || '';
+      $('#set-profile-img').value = s.profileImage || '';
+      $('#set-seo-title').value = s.seoTitle || '';
+      $('#set-seo-desc').value = s.seoDescription || '';
+      $('#set-social-links').value = (s.socialLinks || []).map(l => l.name + ' - ' + l.url).join('\n');
+    } catch (e) { toast('Failed to load settings', 'error'); }
+  }
+
+  async function saveSettingsEditor() {
+    try {
+      const socialLines = $('#set-social-links').value.trim().split('\n').filter(Boolean);
+      const socialLinks = socialLines.map(line => {
+        const parts = line.split(' - ');
+        return { name: (parts[0] || '').trim(), url: (parts[1] || '').trim() };
+      });
+      await API.adminSaveSettings({
+        siteName: $('#set-site-name').value.trim(),
+        tagline: $('#set-tagline').value.trim(),
+        authorName: $('#set-author-name').value.trim(),
+        authorTitle: $('#set-author-title').value.trim(),
+        location: $('#set-location').value.trim(),
+        contactEmail: $('#set-email').value.trim(),
+        profileImage: $('#set-profile-img').value.trim(),
+        seoTitle: $('#set-seo-title').value.trim(),
+        seoDescription: $('#set-seo-desc').value.trim(),
+        socialLinks
+      });
+      toast('Settings saved', 'success');
+    } catch (e) { toast('Failed to save settings', 'error'); }
+  }
+
   /* --- Init --- */
   function init() {
     /* Login */
@@ -561,6 +681,14 @@
         input.value = '';
       }
     });
+
+    /* CMS Save buttons */
+    const hpSave = $('#hp-save');
+    if (hpSave) hpSave.addEventListener('click', saveHomepageEditor);
+    const aboutSave = $('#about-save');
+    if (aboutSave) aboutSave.addEventListener('click', saveAboutEditor);
+    const settingsSave = $('#settings-save');
+    if (settingsSave) settingsSave.addEventListener('click', saveSettingsEditor);
 
     /* Start autosave */
     startAutosave();

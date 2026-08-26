@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://USERNAME.github.io/REPOSITORY/sitemap.xml
+Sitemap: https://adibhaialpha.github.io/chitrons-archive/sitemap.xml

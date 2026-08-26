@@ -65,6 +65,21 @@
           </button>
         </div>
         <div class="sidebar-section">
+          <div class="sidebar-section-title">Site Content</div>
+          <button class="sidebar-link" data-view="content-homepage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Homepage
+          </button>
+          <button class="sidebar-link" data-view="content-about">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            About
+          </button>
+          <button class="sidebar-link" data-view="content-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+          </button>
+        </div>
+        <div class="sidebar-section">
           <div class="sidebar-section-title">Manage</div>
           <button class="sidebar-link" data-view="labels">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -257,6 +272,153 @@
             <button class="btn btn-primary btn-sm" id="add-label-btn">Add</button>
           </div>
           <div id="labels-list"></div>
+        </div>
+
+        <!-- HOMEPAGE CONTENT VIEW -->
+        <div id="view-content-homepage" class="admin-view" style="display:none">
+          <div class="content-editor">
+            <h3>Homepage Content</h3>
+            <div class="content-field">
+              <label>Hero Title</label>
+              <input type="text" id="hp-hero-title" placeholder="Chitron Bhattacharjee">
+            </div>
+            <div class="content-field">
+              <label>Hero Description</label>
+              <textarea id="hp-hero-desc" rows="3"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Primary Button Text</label>
+              <input type="text" id="hp-primary-text" placeholder="Read Writing">
+            </div>
+            <div class="content-field">
+              <label>Primary Button Link</label>
+              <input type="text" id="hp-primary-link" placeholder="./writing.html">
+            </div>
+            <div class="content-field">
+              <label>Secondary Button Text</label>
+              <input type="text" id="hp-secondary-text" placeholder="About Me">
+            </div>
+            <div class="content-field">
+              <label>Secondary Button Link</label>
+              <input type="text" id="hp-secondary-link" placeholder="./about.html">
+            </div>
+            <div class="content-field">
+              <label>Featured Section Title</label>
+              <input type="text" id="hp-section-title" placeholder="Latest Writing">
+            </div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary btn-sm" id="hp-save">Save Homepage</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABOUT CONTENT VIEW -->
+        <div id="view-content-about" class="admin-view" style="display:none">
+          <div class="content-editor">
+            <h3>About Page Content</h3>
+            <div class="content-field">
+              <label>Full Name</label>
+              <input type="text" id="about-name" placeholder="Chitron Bhattacharjee">
+            </div>
+            <div class="content-field">
+              <label>Headline</label>
+              <input type="text" id="about-headline" placeholder="Hi, I'm Chitron Bhattacharjee.">
+            </div>
+            <div class="content-field">
+              <label>Short Bio (one paragraph)</label>
+              <textarea id="about-short-bio" rows="3"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Profile Image URL</label>
+              <input type="url" id="about-profile-img" placeholder="https://...">
+              <div class="help">Paste an image URL. Use a square image for best results.</div>
+            </div>
+            <div class="content-field">
+              <label>Biography (one paragraph per line)</label>
+              <textarea id="about-biography" rows="6"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Roles (one per line)</label>
+              <textarea id="about-roles" rows="4" placeholder="AI Development&#10;Web Development&#10;Bot Development"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Skills (one per line)</label>
+              <textarea id="about-skills" rows="4" placeholder="JavaScript&#10;Node.js&#10;HTML"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Interests (one per line)</label>
+              <textarea id="about-interests" rows="3"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Philosophy</label>
+              <textarea id="about-philosophy" rows="3"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Current Focus</label>
+              <textarea id="about-current" rows="2"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Writing Section Text</label>
+              <textarea id="about-writing-text" rows="2"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Contact Links (one per line, format: Name - URL)</label>
+              <textarea id="about-contact-links" rows="3" placeholder="GitHub - https://github.com/AdiBhaiAlpha&#10;Email - mailto:chitronbhattacharjee@gmail.com"></textarea>
+            </div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary btn-sm" id="about-save">Save About</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SITE SETTINGS VIEW -->
+        <div id="view-content-settings" class="admin-view" style="display:none">
+          <div class="content-editor">
+            <h3>Site Settings</h3>
+            <div class="content-field">
+              <label>Site Name</label>
+              <input type="text" id="set-site-name" placeholder="Chitrons Archive">
+            </div>
+            <div class="content-field">
+              <label>Tagline</label>
+              <input type="text" id="set-tagline" placeholder="Notes, ideas, experiments and things worth remembering.">
+            </div>
+            <div class="content-field">
+              <label>Author Name</label>
+              <input type="text" id="set-author-name" placeholder="Chitron Bhattacharjee">
+            </div>
+            <div class="content-field">
+              <label>Author Title</label>
+              <input type="text" id="set-author-title" placeholder="AI Developer, Programmer & Writer">
+            </div>
+            <div class="content-field">
+              <label>Location</label>
+              <input type="text" id="set-location" placeholder="Bangladesh">
+            </div>
+            <div class="content-field">
+              <label>Contact Email</label>
+              <input type="email" id="set-email" placeholder="chitronbhattacharjee@gmail.com">
+            </div>
+            <div class="content-field">
+              <label>Profile Image URL</label>
+              <input type="url" id="set-profile-img" placeholder="https://...">
+            </div>
+            <div class="content-field">
+              <label>SEO Title</label>
+              <input type="text" id="set-seo-title" placeholder="Chitron Bhattacharjee | Chitrons Archive">
+            </div>
+            <div class="content-field">
+              <label>SEO Description</label>
+              <textarea id="set-seo-desc" rows="2"></textarea>
+            </div>
+            <div class="content-field">
+              <label>Social Links (one per line, format: Name - URL)</label>
+              <textarea id="set-social-links" rows="3" placeholder="GitHub - https://github.com/AdiBhaiAlpha"></textarea>
+            </div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary btn-sm" id="settings-save">Save Settings</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
