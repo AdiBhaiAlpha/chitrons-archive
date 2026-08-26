@@ -6,15 +6,40 @@ const API = (() => {
   const BASE = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '').replace(/\/+$/, '');
   const TIMEOUT = 10000;
 
+  function getToken() {
+    try {
+      return localStorage.getItem('chitron_admin_token') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function setToken(tok) {
+    try {
+      if (tok) {
+        localStorage.setItem('chitron_admin_token', tok);
+      } else {
+        localStorage.removeItem('chitron_admin_token');
+      }
+    } catch (e) {}
+  }
+
   async function request(path, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT);
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Admin-Token'] = token;
+    }
+
     try {
       const res = await fetch(`${BASE}${path}`, {
         ...options,
         signal: controller.signal,
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...options.headers }
+        headers
       });
       clearTimeout(timer);
       if (!res.ok) {
@@ -71,15 +96,32 @@ const API = (() => {
     },
 
     async login(pin) {
-      return request('/api/auth/login', { method: 'POST', body: JSON.stringify({ pin }) });
+      const res = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ pin }) });
+      if (res && res.token) {
+        setToken(res.token);
+      }
+      return res;
     },
 
     async logout() {
-      return request('/api/auth/logout', { method: 'POST' });
+      try {
+        await request('/api/auth/logout', { method: 'POST' });
+      } finally {
+        setToken('');
+      }
     },
 
     async checkAuth() {
-      return request('/api/auth/me');
+      try {
+        const res = await request('/api/auth/me');
+        if (!res.isAdmin) {
+          setToken('');
+        }
+        return res;
+      } catch (e) {
+        setToken('');
+        throw e;
+      }
     },
 
     async adminGetPosts({ search, status, page, limit } = {}) {

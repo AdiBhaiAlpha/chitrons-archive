@@ -17,50 +17,71 @@
       var p = data.profile;
       if (!p) return;
 
-      if (p.name) document.getElementById('about-name').textContent = p.name;
-      if (p.headline) document.getElementById('about-headline').textContent = p.headline;
-      if (p.shortBio) document.getElementById('about-short-bio').innerHTML = '<p>' + esc(p.shortBio) + '</p>';
+      var nameEl = document.getElementById('about-name');
+      if (nameEl && p.name) nameEl.textContent = p.name;
+
+      var headlineEl = document.getElementById('about-headline');
+      if (headlineEl && p.headline) headlineEl.textContent = p.headline;
+
+      var shortBioEl = document.getElementById('about-short-bio');
+      if (shortBioEl && p.shortBio) shortBioEl.innerHTML = '<p>' + esc(p.shortBio) + '</p>';
 
       if (p.profileImage) {
         var img = document.getElementById('about-profile-image');
-        if (img) { img.src = p.profileImage; img.alt = p.imageAlt || p.name; img.style.display = ''; }
+        if (img) { img.src = p.profileImage; img.alt = p.imageAlt || p.name || 'Profile'; img.style.display = ''; }
       }
 
-      if (p.biography) {
-        document.getElementById('about-biography').innerHTML = p.biography.split('\n').filter(Boolean).map(function(para) { return '<p>' + esc(para) + '</p>'; }).join('');
+      var bioEl = document.getElementById('about-biography');
+      if (bioEl && p.biography) {
+        bioEl.innerHTML = p.biography.split('\n').filter(Boolean).map(function(para) { return '<p>' + esc(para) + '</p>'; }).join('');
       }
 
-      if (p.roles && p.roles.length) {
-        document.getElementById('about-roles').innerHTML = p.roles.map(function(r) { return '<li>' + esc(r) + '</li>'; }).join('');
-        document.getElementById('section-roles').style.display = '';
+      var rolesEl = document.getElementById('about-roles');
+      var rolesSec = document.getElementById('section-roles');
+      if (rolesEl && p.roles && p.roles.length) {
+        rolesEl.innerHTML = p.roles.map(function(r) { return '<li>' + esc(r) + '</li>'; }).join('');
+        if (rolesSec) rolesSec.style.display = '';
       }
 
-      if (p.interests && p.interests.length) {
-        document.getElementById('about-interests').innerHTML = p.interests.map(function(r) { return '<li>' + esc(r) + '</li>'; }).join('');
-        document.getElementById('section-interests').style.display = '';
+      var interestsEl = document.getElementById('about-interests');
+      var interestsSec = document.getElementById('section-interests');
+      if (interestsEl && p.interests && p.interests.length) {
+        interestsEl.innerHTML = p.interests.map(function(r) { return '<li>' + esc(r) + '</li>'; }).join('');
+        if (interestsSec) interestsSec.style.display = '';
       }
 
-      if (p.skills && p.skills.length) {
-        document.getElementById('about-skills').innerHTML = p.skills.map(function(s) { return '<li>' + esc(s) + '</li>'; }).join('');
-        document.getElementById('section-skills').style.display = '';
+      var skillsEl = document.getElementById('about-skills');
+      var skillsSec = document.getElementById('section-skills');
+      if (skillsEl && p.skills && p.skills.length) {
+        skillsEl.innerHTML = p.skills.map(function(s) { return '<li>' + esc(s) + '</li>'; }).join('');
+        if (skillsSec) skillsSec.style.display = '';
       }
 
-      if (p.projects && p.projects.length) {
-        document.getElementById('about-projects').innerHTML = p.projects.map(function(proj) {
+      var projectsEl = document.getElementById('about-projects');
+      var projectsSec = document.getElementById('section-projects');
+      if (projectsEl && p.projects && p.projects.length) {
+        projectsEl.innerHTML = p.projects.map(function(proj) {
           return '<div class="project-item"><h3>' + esc(proj.title) + '</h3><p>' + esc(proj.description) + '</p>' + (proj.tech ? '<span class="tech">' + esc(proj.tech) + '</span>' : '') + '</div>';
         }).join('');
-        document.getElementById('section-projects').style.display = '';
+        if (projectsSec) projectsSec.style.display = '';
       }
 
-      if (p.philosophy) document.getElementById('about-philosophy').innerHTML = '<p>' + esc(p.philosophy) + '</p>';
-      if (p.currentFocus) document.getElementById('about-current').innerHTML = '<p>' + esc(p.currentFocus) + '</p>';
-      if (p.writingSection) document.getElementById('about-writing').innerHTML = '<p>' + esc(p.writingSection) + '</p>';
+      var philEl = document.getElementById('about-philosophy');
+      if (philEl && p.philosophy) philEl.innerHTML = '<p>' + esc(p.philosophy) + '</p>';
 
-      if (p.contactLinks && p.contactLinks.length) {
-        document.getElementById('about-contact').innerHTML = p.contactLinks.map(function(link) {
+      var currEl = document.getElementById('about-current');
+      if (currEl && p.currentFocus) currEl.innerHTML = '<p>' + esc(p.currentFocus) + '</p>';
+
+      var writingEl = document.getElementById('about-writing');
+      if (writingEl && p.writingSection) writingEl.innerHTML = '<p>' + esc(p.writingSection) + '</p>';
+
+      var contactEl = document.getElementById('about-contact');
+      var contactSec = document.getElementById('section-contact');
+      if (contactEl && p.contactLinks && p.contactLinks.length) {
+        contactEl.innerHTML = p.contactLinks.map(function(link) {
           return '<a href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer">' + esc(link.name) + '</a>';
         }).join('');
-        document.getElementById('section-contact').style.display = '';
+        if (contactSec) contactSec.style.display = '';
       }
     } catch (e) {}
   }

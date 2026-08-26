@@ -86,6 +86,8 @@
     else if (view === 'content-homepage') loadHomepageEditor();
     else if (view === 'content-about') loadAboutEditor();
     else if (view === 'content-settings') loadSettingsEditor();
+    const contentEl = $('.admin-content');
+    if (contentEl) contentEl.scrollTop = 0;
     closeSidebar();
   }
 
@@ -101,7 +103,11 @@
       $('#stat-drafts').textContent = data.drafts || 0;
       $('#stat-scheduled').textContent = data.scheduled || 0;
     } catch (e) {
-      toast('Failed to load stats', 'error');
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        showLogin();
+        return;
+      }
+      console.warn('Could not load stats:', e);
     }
     try {
       const data = await API.adminGetPosts({ limit: 5 });
@@ -123,7 +129,11 @@
       } else {
         el.innerHTML = '<div class="empty-state"><p>No posts yet. Create your first post.</p></div>';
       }
-    } catch (e) {}
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        showLogin();
+      }
+    }
   }
 
   /* --- Posts List --- */
@@ -318,7 +328,12 @@
       updateSaveStatus('saved');
       if (publish) switchView('posts', '');
     } catch (e) {
-      toast(e.message || 'Failed to save', 'error');
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired or unauthorized. Please enter your PIN to continue.', 'error');
+        showLogin();
+      } else {
+        toast(e.message || 'Failed to save post', 'error');
+      }
       updateSaveStatus('');
     }
   }
@@ -433,7 +448,14 @@
         featuredSectionTitle: $('#hp-section-title').value.trim()
       });
       toast('Homepage saved', 'success');
-    } catch (e) { toast('Failed to save homepage', 'error'); }
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired. Please log in again.', 'error');
+        showLogin();
+      } else {
+        toast('Failed to save homepage: ' + (e.message || ''), 'error');
+      }
+    }
   }
 
   async function loadAboutEditor() {
@@ -487,7 +509,14 @@
         projects
       });
       toast('About page saved', 'success');
-    } catch (e) { toast('Failed to save about', 'error'); }
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired. Please log in again.', 'error');
+        showLogin();
+      } else {
+        toast('Failed to save about: ' + (e.message || ''), 'error');
+      }
+    }
   }
 
   async function loadSettingsEditor() {
@@ -528,7 +557,14 @@
         socialLinks
       });
       toast('Settings saved', 'success');
-    } catch (e) { toast('Failed to save settings', 'error'); }
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired. Please log in again.', 'error');
+        showLogin();
+      } else {
+        toast('Failed to save settings: ' + (e.message || ''), 'error');
+      }
+    }
   }
 
   /* --- Init --- */
