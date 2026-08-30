@@ -1182,6 +1182,86 @@ app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
   }
 });
 
+/* --- Dynamic Sitemap and RSS Feed Generation --- */
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const siteUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+    let posts = [];
+    if (isMongoConnected) {
+      posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 }).select('slug publishedAt updatedAt');
+    } else {
+      posts = inMemoryPosts.filter(p => p.status === 'published');
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n`;
+    xml += `        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n`;
+    xml += `        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9\n`;
+    xml += `        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n`;
+
+    // Static pages
+    xml += `  <url>\n    <loc>${siteUrl}/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/about.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/writing.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+
+    // Dynamic Posts
+    posts.forEach(p => {
+      const pDate = (p.updatedAt || p.publishedAt || new Date()).toISOString().split('T')[0];
+      xml += `  <url>\n    <loc>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</loc>\n    <lastmod>${pDate}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+    });
+
+    xml += `</urlset>`;
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    res.sendFile(path.join(staticRoot, 'sitemap.xml'));
+  }
+});
+
+app.get('/feed.xml', async (req, res) => {
+  try {
+    const siteUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+    let posts = [];
+    if (isMongoConnected) {
+      posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 });
+    } else {
+      posts = inMemoryPosts.filter(p => p.status === 'published');
+    }
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
+    xml += `  <channel>\n`;
+    xml += `    <title>Chitrons Archive</title>\n`;
+    xml += `    <link>${siteUrl}/</link>\n`;
+    xml += `    <description>Notes, ideas, experiments and things worth remembering — by Chitron Bhattacharjee.</description>\n`;
+    xml += `    <language>en-US</language>\n`;
+    xml += `    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>\n`;
+    xml += `    <atom:link href="${siteUrl}/feed.xml" rel="self" type="application/rss+xml"/>\n`;
+
+    posts.forEach(p => {
+      const pub = p.publishedAt ? new Date(p.publishedAt).toUTCString() : new Date().toUTCString();
+      const desc = (p.excerpt || p.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const title = (p.title || 'Untitled').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      xml += `    <item>\n`;
+      xml += `      <title>${title}</title>\n`;
+      xml += `      <link>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</link>\n`;
+      xml += `      <guid>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</guid>\n`;
+      xml += `      <pubDate>${pub}</pubDate>\n`;
+      xml += `      <description>${desc}</description>\n`;
+      xml += `      <author>chitronbhattacharjee@gmail.com (Chitron Bhattacharjee)</author>\n`;
+      if (p.category) xml += `      <category>${p.category}</category>\n`;
+      xml += `    </item>\n`;
+    });
+
+    xml += `  </channel>\n</rss>`;
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    res.sendFile(path.join(staticRoot, 'feed.xml'));
+  }
+});
+
 /* --- Static Files Serving --- */
 const staticRoot = path.resolve(__dirname);
 app.use(express.static(staticRoot));

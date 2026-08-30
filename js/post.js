@@ -65,31 +65,43 @@
     var tagsEl = document.getElementById('article-tags');
     if (tagsEl) tagsEl.innerHTML = tagsHtml;
 
+    var breadcrumbTitle = document.getElementById('breadcrumb-current-title');
+    if (breadcrumbTitle) breadcrumbTitle.textContent = post.title || 'Article';
+
     var bodyEl = document.getElementById('article-body');
-    if (bodyEl) bodyEl.innerHTML = post.content || '';
+    if (bodyEl) {
+      bodyEl.innerHTML = post.content || '';
+      // Ensure all images in article have lazy loading and alt tags if missing
+      bodyEl.querySelectorAll('img').forEach(function(img) {
+        if (!img.getAttribute('loading')) img.setAttribute('loading', 'lazy');
+        if (!img.getAttribute('alt')) img.setAttribute('alt', post.title || 'Article image');
+      });
+    }
 
     /* SEO & Metadata */
     try {
       var siteName = 'Chitrons Archive';
       var author = post.author || 'Chitron Bhattacharjee';
-      var pageUrl = window.location.href;
+      var baseUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+      var pageUrl = baseUrl + '/post.html?slug=' + encodeURIComponent(post.slug);
 
       if (window.SeoHelper) {
         SeoHelper.setTitle((post.title || 'Article') + ' — ' + author + ' | ' + siteName);
-        SeoHelper.setMeta('description', post.excerpt || '');
+        SeoHelper.setMeta('description', post.excerpt || (post.title + ' — An article by Chitron Bhattacharjee'));
         SeoHelper.setCanonical(pageUrl);
-        SeoHelper.setProperty('og:title', post.title || '');
+        SeoHelper.setProperty('og:title', (post.title || 'Article') + ' — ' + author);
         SeoHelper.setProperty('og:description', post.excerpt || '');
         SeoHelper.setProperty('og:type', 'article');
         SeoHelper.setProperty('og:url', pageUrl);
         SeoHelper.setProperty('og:site_name', siteName);
         if (post.coverImage) SeoHelper.setProperty('og:image', post.coverImage);
         SeoHelper.setProperty('article:published_time', d.toISOString());
+        if (updDate) SeoHelper.setProperty('article:modified_time', updDate.toISOString());
         SeoHelper.setProperty('article:author', author);
         if (post.category) SeoHelper.setProperty('article:section', post.category);
         labels.forEach(function(t) { SeoHelper.setProperty('article:tag', t); });
         SeoHelper.setMeta('twitter:card', 'summary_large_image');
-        SeoHelper.setMeta('twitter:title', post.title || '');
+        SeoHelper.setMeta('twitter:title', (post.title || 'Article') + ' — ' + author);
         SeoHelper.setMeta('twitter:description', post.excerpt || '');
       }
 
@@ -103,27 +115,33 @@
           "description": post.excerpt || '',
           "datePublished": d.toISOString(),
           "dateModified": modDate.toISOString(),
+          "mainEntityOfPage": { "@type": "WebPage", "@id": pageUrl },
           "author": {
             "@type": "Person",
             "name": author,
-            "url": window.location.origin + '/about.html'
+            "url": baseUrl + '/about.html'
           },
           "publisher": {
-            "@type": "Organization",
-            "name": siteName,
-            "url": window.location.origin
+            "@type": "Person",
+            "name": author,
+            "url": baseUrl + '/'
           },
-          "mainEntityOfPage": { "@type": "WebPage", "@id": pageUrl },
+          "isPartOf": {
+            "@type": "WebSite",
+            "name": siteName,
+            "url": baseUrl + '/'
+          },
           "articleSection": post.category || undefined,
-          "keywords": labels.join(', ') || undefined,
-          "image": post.coverImage || undefined
+          "keywords": labels.length > 0 ? labels.join(', ') : undefined,
+          "image": post.coverImage || undefined,
+          "url": pageUrl
         },
         {
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": window.location.origin + '/' },
-            { "@type": "ListItem", "position": 2, "name": "Writing", "item": window.location.origin + '/writing.html' },
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": baseUrl + '/' },
+            { "@type": "ListItem", "position": 2, "name": "Writing", "item": baseUrl + '/writing.html' },
             { "@type": "ListItem", "position": 3, "name": post.title || 'Article', "item": pageUrl }
           ]
         }
