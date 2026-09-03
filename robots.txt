@@ -3,5 +3,5 @@ Allow: /
 Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://adibhaialpha.github.io/chitrons-archive/sitemap.xml
+Sitemap: https://chitron.iam.bd/sitemap.xml
 

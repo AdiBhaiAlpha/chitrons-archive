@@ -1,0 +1,44 @@
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://chitron.iam.bd/#website",
+      "url": "https://chitron.iam.bd/",
+      "name": "Chitrons Archive",
+      "description": "Personal digital archive, writing blog, and official website of Chitron Bhattacharjee.",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "Person",
+      "@id": "https://chitron.iam.bd/#person",
+      "name": "Chitron Bhattacharjee",
+      "url": "https://chitron.iam.bd/",
+      "image": "YOUR_PROFILE_IMAGE_URL",
+      "jobTitle": [
+        "AI Developer",
+        "Programmer",
+        "Writer"
+      ],
+      "description": "Chitron Bhattacharjee is an AI developer, programmer, and writer from Bangladesh, working on conversational AI systems, web applications, and software projects.",
+      "knowsAbout": [
+        "Artificial Intelligence",
+        "JavaScript",
+        "Node.js",
+        "Express.js",
+        "MongoDB",
+        "PHP",
+        "Web Development",
+        "UI/UX Design",
+        "Conversational AI"
+      ],
+      "sameAs": [
+        "https://github.com/AdiBhaiAlpha",
+        "https://facebook.com/ssfadi",
+        "https://instagram.com/im.chitron"
+      ]
+    }
+  ]
+}
+</script>

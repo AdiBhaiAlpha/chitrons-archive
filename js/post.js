@@ -82,7 +82,7 @@
     try {
       var siteName = 'Chitrons Archive';
       var author = post.author || 'Chitron Bhattacharjee';
-      var baseUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+      var baseUrl = 'https://chitron.iam.bd';
       var pageUrl = baseUrl + '/post.html?slug=' + encodeURIComponent(post.slug);
 
       if (window.SeoHelper) {

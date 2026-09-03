@@ -24,7 +24,9 @@
       if (headlineEl && p.headline) headlineEl.textContent = p.headline;
 
       var shortBioEl = document.getElementById('about-short-bio');
-      if (shortBioEl && p.shortBio) shortBioEl.innerHTML = '<p>' + esc(p.shortBio) + '</p>';
+      if (shortBioEl && p.shortBio) {
+        shortBioEl.innerHTML = p.shortBio.split('\n').filter(Boolean).map(function(para) { return '<p>' + esc(para) + '</p>'; }).join('');
+      }
 
       if (p.profileImage) {
         var img = document.getElementById('about-profile-image');
@@ -61,13 +63,19 @@
       var projectsSec = document.getElementById('section-projects');
       if (projectsEl && p.projects && p.projects.length) {
         projectsEl.innerHTML = p.projects.map(function(proj) {
-          return '<div class="project-item"><h3>' + esc(proj.title) + '</h3><p>' + esc(proj.description) + '</p>' + (proj.tech ? '<span class="tech">' + esc(proj.tech) + '</span>' : '') + '</div>';
+          var techHtml = '';
+          if (proj.tech) {
+            techHtml = '<p class="tech-built">' + esc(proj.tech).replace(/^Built with:/i, '<strong>Built with:</strong>') + '</p>';
+          }
+          return '<div class="project-item"><h3>' + esc(proj.title) + '</h3><p>' + esc(proj.description) + '</p>' + techHtml + '</div>';
         }).join('');
         if (projectsSec) projectsSec.style.display = '';
       }
 
       var philEl = document.getElementById('about-philosophy');
-      if (philEl && p.philosophy) philEl.innerHTML = '<p>' + esc(p.philosophy) + '</p>';
+      if (philEl && p.philosophy) {
+        philEl.innerHTML = p.philosophy.split('\n').filter(Boolean).map(function(para) { return '<p>' + esc(para) + '</p>'; }).join('');
+      }
 
       var currEl = document.getElementById('about-current');
       if (currEl && p.currentFocus) currEl.innerHTML = '<p>' + esc(p.currentFocus) + '</p>';
@@ -79,7 +87,16 @@
       var contactSec = document.getElementById('section-contact');
       if (contactEl && p.contactLinks && p.contactLinks.length) {
         contactEl.innerHTML = p.contactLinks.map(function(link) {
-          return '<a href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer">' + esc(link.name) + '</a>';
+          var icon = '';
+          var lname = (link.name || '').toLowerCase();
+          if (lname.indexOf('github') !== -1) {
+            icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>';
+          } else if (lname.indexOf('facebook') !== -1) {
+            icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>';
+          } else if (lname.indexOf('instagram') !== -1) {
+            icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+          }
+          return '<a href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer">' + icon + esc(link.name) + '</a>';
         }).join('');
         if (contactSec) contactSec.style.display = '';
       }

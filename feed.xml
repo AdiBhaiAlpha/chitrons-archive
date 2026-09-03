@@ -2,15 +2,15 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Chitrons Archive</title>
-    <link>https://adibhaialpha.github.io/chitrons-archive/</link>
+    <link>https://chitron.iam.bd/</link>
     <description>Notes, ideas, experiments and things worth remembering — by Chitron Bhattacharjee.</description>
     <language>en-US</language>
     <lastBuildDate>Sun, 30 Aug 2026 00:00:00 GMT</lastBuildDate>
-    <atom:link href="https://adibhaialpha.github.io/chitrons-archive/feed.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://chitron.iam.bd/feed.xml" rel="self" type="application/rss+xml"/>
     <item>
       <title>Building ShiPu AI: Reflections on Bengali Conversational Systems</title>
-      <link>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=building-shipu-ai-reflections</link>
-      <guid>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=building-shipu-ai-reflections</guid>
+      <link>https://chitron.iam.bd/post.html?slug=building-shipu-ai-reflections</link>
+      <guid>https://chitron.iam.bd/post.html?slug=building-shipu-ai-reflections</guid>
       <pubDate>Sun, 30 Aug 2026 00:00:00 GMT</pubDate>
       <description>Designing conversational personalities and language model integrations tailored for Bengali speakers.</description>
       <author>chitronbhattacharjee@gmail.com (Chitron Bhattacharjee)</author>
@@ -18,8 +18,8 @@
     </item>
     <item>
       <title>Why I Prefer Minimalist Digital Archives</title>
-      <link>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=why-i-prefer-minimalist-digital-archives</link>
-      <guid>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=why-i-prefer-minimalist-digital-archives</guid>
+      <link>https://chitron.iam.bd/post.html?slug=why-i-prefer-minimalist-digital-archives</link>
+      <guid>https://chitron.iam.bd/post.html?slug=why-i-prefer-minimalist-digital-archives</guid>
       <pubDate>Sun, 30 Aug 2026 00:00:00 GMT</pubDate>
       <description>Thoughts on building personal web spaces with lightweight code, calm typography, and zero clutter.</description>
       <author>chitronbhattacharjee@gmail.com (Chitron Bhattacharjee)</author>
@@ -27,8 +27,8 @@
     </item>
     <item>
       <title>On Writing and Code: Two Mediums of Thought</title>
-      <link>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=on-writing-and-code</link>
-      <guid>https://adibhaialpha.github.io/chitrons-archive/post.html?slug=on-writing-and-code</guid>
+      <link>https://chitron.iam.bd/post.html?slug=on-writing-and-code</link>
+      <guid>https://chitron.iam.bd/post.html?slug=on-writing-and-code</guid>
       <pubDate>Sun, 30 Aug 2026 00:00:00 GMT</pubDate>
       <description>Exploring how constructing software and writing prose both require precision, structure, and empathy for the reader.</description>
       <author>chitronbhattacharjee@gmail.com (Chitron Bhattacharjee)</author>

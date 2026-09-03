@@ -114,56 +114,50 @@ const initialPosts = [
 
 const initialAbout = {
   name: 'Chitron Bhattacharjee',
-  headline: "Hi, I'm Chitron Bhattacharjee.",
-  shortBio: "I'm an AI developer, programmer, and writer from Bangladesh. I build software, experiment with conversational AI, and write about technology, society, and ideas.",
-  biography: "I am a developer and student based in Bangladesh with a deep curiosity for how humans and digital systems interact.\n\nMy work ranges from building conversational AI systems like ShiPu AI to crafting responsive web applications, bot architectures, and writing essays on technology and human experience.\n\nI believe in learning by building practical tools that solve real problems rather than treating programming merely as an abstract concept.",
-  profileImage: '',
+  headline: "Hi, I’m Chitron Bhattacharjee.",
+  shortBio: "I’m an AI developer, programmer, and writer from Bangladesh. I enjoy building things with technology, especially AI-powered systems, web applications, and tools that solve real problems in a simple way.\n\nI’m always interested in learning how things work behind the scenes and turning ideas into something people can actually use.",
+  biography: "I work with modern web technologies and enjoy experimenting with AI, automation, and conversational systems. Most of my time goes into building projects, improving my skills, and exploring new ideas in technology.\n\nI also enjoy writing. Sometimes I write about technology, sometimes about ideas and experiences, and sometimes simply to put thoughts into words.",
+  profileImage: 'https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png',
   imageAlt: 'Chitron Bhattacharjee',
-  roles: ['AI Developer', 'Full-Stack Programmer', 'Bot Developer', 'Writer & Creative Technologist'],
+  roles: [
+    'Build AI-powered applications and conversational systems',
+    'Develop full-stack web applications',
+    'Work with JavaScript, Node.js, PHP, and modern web technologies',
+    'Design clean and practical user interfaces',
+    'Write about technology, ideas, and personal thoughts'
+  ],
   interests: [
-    'Artificial Intelligence & LLMs',
-    'Conversational Agents',
-    'Full-Stack Web Development',
-    'Cybersecurity & Automation',
-    'Bengali Natural Language Processing',
-    'Reflective Writing & Poetry'
+    'Artificial Intelligence',
+    'Programming',
+    'Web Development',
+    'Conversational Systems',
+    'UI/UX Design',
+    'Writing',
+    'Software Architecture'
   ],
   skills: [
-    'JavaScript / Node.js',
-    'Express & REST APIs',
-    'Python & Prompt Engineering',
-    'HTML5 / CSS3 / UI Design',
-    'MongoDB & Databases',
-    'Bot Architectures & Automation',
-    'Git & Cloud Deployment'
+    'JavaScript',
+    'Node.js',
+    'Express',
+    'MongoDB',
+    'PHP',
+    'HTML & CSS'
   ],
   projects: [
     {
       title: 'ShiPu AI',
-      description: 'A conversational Bengali AI chatbot system integrating LLM architectures and natural conversational personalities.',
-      tech: 'Node.js, LLMs, REST APIs',
-      url: 'https://github.com/AdiBhaiAlpha'
-    },
-    {
-      title: 'Chitrons Archive',
-      description: 'A minimalist personal digital archive, publishing platform, and CMS for writings, notes, and technical ideas.',
-      tech: 'Node.js, Express, JavaScript, CSS3',
-      url: 'https://github.com/AdiBhaiAlpha/chitrons-archive'
-    },
-    {
-      title: 'Bot Development Ecosystem',
-      description: 'Custom messaging bot architectures, command processors, and webhook automation frameworks.',
-      tech: 'JavaScript, Node.js, Webhooks',
+      description: 'ShiPu AI is one of my ongoing projects focused on conversational AI. The goal is to build a useful and flexible AI system that can communicate naturally and perform practical tasks.',
+      tech: 'Built with: Node.js, JavaScript, and modern web technologies.',
       url: 'https://github.com/AdiBhaiAlpha'
     }
   ],
-  philosophy: 'I prefer clean, understated interfaces and practical technology built for real people. Software should be transparent, respectful of attention, and continuously improved through iteration.',
-  currentFocus: 'Currently exploring advanced prompt engineering, autonomous bot workflows, and expanding this writing archive.',
-  writingSection: 'Alongside technical work, I write essays, poetry, and reflective pieces examining the relationship between society, human emotions, and digital technology.',
+  philosophy: "I believe good software does not need to be unnecessarily complicated. I prefer things that are simple, fast, practical, and easy to understand.\n\nWhether I’m building a small tool or working on a larger project, I try to focus on making it useful first. Technology should solve problems, not create more of them.",
+  currentFocus: "Right now, I’m working on AI-related projects, conversational systems, and personal web platforms. I’m also continuing to learn and experiment with new technologies as I build.",
+  writingSection: "Writing gives me another way to explore and share ideas. Here you'll find a mix of reflective writing, technical notes, experiments, and thoughts about technology and the things I learn while building.",
   contactLinks: [
     { name: 'GitHub', url: 'https://github.com/AdiBhaiAlpha' },
-    { name: 'Public Email', url: 'mailto:chitronbhattacharjee@gmail.com' },
-    { name: 'Bio Link', url: 'https://chitron.bio.link' }
+    { name: 'Facebook', url: 'https://facebook.com/ssfadi' },
+    { name: 'Instagram', url: 'https://instagram.com/im.chitron' }
   ]
 };
 
@@ -237,11 +231,8 @@ async function initMongoDB() {
       }
     }
 
-    const existingAbout = await AboutProfile.findOne();
-    if (!existingAbout || !existingAbout.biography) {
-      console.log('Seeding complete About profile to MongoDB...');
-      await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true, setDefaultsOnInsert: true });
-    }
+    console.log('Syncing About profile to MongoDB...');
+    await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true, setDefaultsOnInsert: true });
 
     const existingHp = await Homepage.findOne();
     if (!existingHp) {
@@ -585,6 +576,10 @@ app.get('/api/content/about', async (req, res) => {
   } catch (err) {
     res.json({ profile: inMemoryAbout });
   }
+});
+
+app.get('/api/about', (req, res) => {
+  res.redirect(307, '/api/content/about');
 });
 
 /* --- Admin Stats & Posts --- */
@@ -1185,7 +1180,7 @@ app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
 /* --- Dynamic Sitemap and RSS Feed Generation --- */
 app.get('/sitemap.xml', async (req, res) => {
   try {
-    const siteUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+    const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
     if (isMongoConnected) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 }).select('slug publishedAt updatedAt');
@@ -1221,7 +1216,7 @@ app.get('/sitemap.xml', async (req, res) => {
 
 app.get('/feed.xml', async (req, res) => {
   try {
-    const siteUrl = 'https://adibhaialpha.github.io/chitrons-archive';
+    const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
     if (isMongoConnected) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 });
