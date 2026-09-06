@@ -25,9 +25,17 @@
     return h;
   }
 
+  function toBnDigits(str) {
+    var bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(str).replace(/[0-9]/g, function(d) { return bnDigits[+d]; });
+  }
+
   function renderPost(p) {
+    const isBn = window.i18n && window.i18n.getLang() === 'bn';
     const d = p.publishedAt ? new Date(p.publishedAt) : new Date();
-    const date = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const date = d.toLocaleDateString(isBn ? 'bn-BD' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const readMins = p.readingTime || 1;
+    const readText = isBn ? toBnDigits(readMins) + ' মিনিট পড়ার সময়' : readMins + ' min read';
     const tags = (p.labels || []).map(t => `<a href="#" class="tag" data-tag="${esc(t)}">${esc(t)}</a>`).join('');
     return `<article class="post-item">
       <div class="post-item-meta">
@@ -35,7 +43,7 @@
         <span class="dot" aria-hidden="true">&middot;</span>
         <time datetime="${d.toISOString()}">${date}</time>
         <span class="dot" aria-hidden="true">&middot;</span>
-        <span>${p.readingTime || 1} min read</span>
+        <span>${readText}</span>
       </div>
       <h3><a href="./post.html?slug=${esc(p.slug)}">${esc(p.title)}</a></h3>
       <p>${esc(p.excerpt)}</p>
@@ -49,16 +57,20 @@
       if (el) el.innerHTML = '';
       return;
     }
+    const isBn = window.i18n && window.i18n.getLang() === 'bn';
+    const prevText = isBn ? '&larr; নতুন' : '&larr; Newer';
+    const nextText = isBn ? 'পুরোনো &rarr;' : 'Older &rarr;';
     let h = '';
-    h += `<button ${pag.page <= 1 ? 'disabled' : ''} data-page="${pag.page - 1}">&larr; Newer</button>`;
+    h += `<button ${pag.page <= 1 ? 'disabled' : ''} data-page="${pag.page - 1}">${prevText}</button>`;
     for (let i = 1; i <= pag.pages; i++) {
+      const pageLabel = isBn ? toBnDigits(i) : i;
       if (i === 1 || i === pag.pages || Math.abs(i - pag.page) <= 1) {
-        h += `<button data-page="${i}" class="${i === pag.page ? 'active' : ''}">${i}</button>`;
+        h += `<button data-page="${i}" class="${i === pag.page ? 'active' : ''}">${pageLabel}</button>`;
       } else if (Math.abs(i - pag.page) === 2) {
         h += `<button disabled>&hellip;</button>`;
       }
     }
-    h += `<button ${pag.page >= pag.pages ? 'disabled' : ''} data-page="${pag.page + 1}">Older &rarr;</button>`;
+    h += `<button ${pag.page >= pag.pages ? 'disabled' : ''} data-page="${pag.page + 1}">${nextText}</button>`;
     el.innerHTML = h;
     el.querySelectorAll('button:not([disabled])').forEach(b => {
       b.addEventListener('click', function() {
@@ -271,6 +283,10 @@
     }
 
     loadPosts();
+
+    window.addEventListener('ca-lang-change', function() {
+      loadPosts();
+    });
   }
 
   if (document.readyState === 'loading') {

@@ -3,6 +3,7 @@ const router = express.Router();
 const slugify = require('slugify');
 const BlogPost = require('../models/BlogPost');
 const Revision = require('../models/Revision');
+const GalleryItem = require('../models/GalleryItem');
 const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
@@ -309,6 +310,144 @@ router.get('/categories', async (req, res) => {
     res.json({ categories: categories.filter(Boolean) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+/* --- Admin Gallery Endpoints --- */
+router.get('/gallery', async (req, res) => {
+  try {
+    const { search, status, category, page = 1, limit = 50 } = req.query;
+    const pNum = Math.max(1, parseInt(page) || 1);
+    const lNum = Math.max(1, parseInt(limit) || 50);
+
+    const query = {};
+    if (status && status !== 'all') query.status = status;
+    if (category && category !== 'all') query.category = new RegExp('^' + category.trim() + '$', 'i');
+    if (search) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      query.$or = [
+        { title: searchRegex },
+        { caption: searchRegex },
+        { location: searchRegex },
+        { tags: searchRegex }
+      ];
+    }
+
+    const total = await GalleryItem.countDocuments(query);
+    const photos = await GalleryItem.find(query)
+      .sort({ order: 1, date: -1, createdAt: -1 })
+      .skip((pNum - 1) * lNum)
+      .limit(lNum);
+
+    const categories = await GalleryItem.distinct('category');
+
+    res.json({
+      photos,
+      total,
+      page: pNum,
+      totalPages: Math.ceil(total / lNum) || 1,
+      categories: categories.filter(Boolean)
+    });
+  } catch (err) {
+    console.error('Error fetching admin gallery:', err);
+    res.status(500).json({ error: 'Failed to fetch admin gallery' });
+  }
+});
+
+router.get('/gallery/:id', async (req, res) => {
+  try {
+    const photo = await GalleryItem.findById(req.params.id);
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch photo' });
+  }
+});
+
+router.post('/gallery', async (req, res) => {
+  try {
+    const { title, caption, url, category, tags, location, alt, date, featured, status, order } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
+    if (!url || !url.trim()) return res.status(400).json({ error: 'Image URL is required' });
+
+    let parsedTags = [];
+    if (Array.isArray(tags)) parsedTags = tags.map(t => String(t).trim()).filter(Boolean);
+    else if (typeof tags === 'string') parsedTags = tags.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean);
+
+    const photo = await GalleryItem.create({
+      title: title.trim(),
+      caption: (caption || '').trim(),
+      url: url.trim(),
+      category: (category || 'Photography').trim(),
+      tags: parsedTags,
+      location: (location || '').trim(),
+      alt: (alt || title).trim(),
+      date: date ? new Date(date) : new Date(),
+      featured: featured === true || featured === 'true',
+      status: status === 'draft' ? 'draft' : 'published',
+      order: parseInt(order) || 0
+    });
+
+    res.status(201).json({ success: true, photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create gallery photo' });
+  }
+});
+
+router.put('/gallery/:id', async (req, res) => {
+  try {
+    const { title, caption, url, category, tags, location, alt, date, featured, status, order } = req.body;
+    const updates = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (caption !== undefined) updates.caption = caption.trim();
+    if (url !== undefined) updates.url = url.trim();
+    if (category !== undefined) updates.category = category.trim();
+    if (tags !== undefined) {
+      if (Array.isArray(tags)) updates.tags = tags.map(t => String(t).trim()).filter(Boolean);
+      else if (typeof tags === 'string') updates.tags = tags.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean);
+    }
+    if (location !== undefined) updates.location = location.trim();
+    if (alt !== undefined) updates.alt = alt.trim();
+    if (date !== undefined) updates.date = new Date(date);
+    if (featured !== undefined) updates.featured = featured === true || featured === 'true';
+    if (status !== undefined) updates.status = status === 'draft' ? 'draft' : 'published';
+    if (order !== undefined) updates.order = parseInt(order) || 0;
+
+    const photo = await GalleryItem.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true });
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ success: true, photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update gallery photo' });
+  }
+});
+
+router.delete('/gallery/:id', async (req, res) => {
+  try {
+    const photo = await GalleryItem.findByIdAndDelete(req.params.id);
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ success: true, message: 'Photo deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete photo' });
+  }
+});
+
+router.post('/gallery/:id/publish', async (req, res) => {
+  try {
+    const photo = await GalleryItem.findByIdAndUpdate(req.params.id, { status: 'published' }, { new: true });
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ success: true, photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to publish photo' });
+  }
+});
+
+router.post('/gallery/:id/unpublish', async (req, res) => {
+  try {
+    const photo = await GalleryItem.findByIdAndUpdate(req.params.id, { status: 'draft' }, { new: true });
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ success: true, photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unpublish photo' });
   }
 });
 

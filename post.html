@@ -3,37 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Article | Chitrons Archive</title>
-  <meta name="description" content="Read this article on Chitrons Archive.">
+  <title>Article | Chitron's Archive</title>
+  <meta name="description" content="Read this article on Chitron's Archive.">
   <link rel="canonical" href="https://chitron.iam.bd/writing.html">
-  <meta name="robots" content="index, follow">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="Chitron Bhattacharjee">
 
   <meta property="og:type" content="article">
-  <meta property="og:title" content="Article | Chitrons Archive">
-  <meta property="og:description" content="Read this article on Chitrons Archive.">
+  <meta property="og:title" content="Article | Chitron's Archive">
+  <meta property="og:description" content="Read this article on Chitron's Archive.">
   <meta property="og:url" content="https://chitron.iam.bd/">
-  <meta property="og:site_name" content="Chitrons Archive">
+  <meta property="og:site_name" content="Chitron's Archive">
   <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://chitron.iam.bd/favicon.png">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Article | Chitrons Archive">
-  <meta name="twitter:description" content="Read this article on Chitrons Archive.">
+  <meta name="twitter:title" content="Article | Chitron's Archive">
+  <meta name="twitter:description" content="Read this article on Chitron's Archive.">
+  <meta name="twitter:image" content="https://chitron.iam.bd/favicon.png">
 
   <link rel="stylesheet" href="./css/style.css">
-  <link rel="alternate" type="application/rss+xml" title="Chitrons Archive RSS Feed" href="./feed.xml">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="./feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
 </head>
 <body>
   <header class="site-header">
     <div class="container">
-      <a href="./" class="site-logo">Chitrons Archive</a>
+      <a href="./" class="site-logo">Chitron's Archive</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="./">Home</a>
-        <a href="./about.html">About</a>
-        <a href="./writing.html" class="active">Writing</a>
+        <a href="./" data-i18n="nav.home">Home</a>
+        <a href="./about.html" data-i18n="nav.about">About</a>
+        <a href="./writing.html" class="active" data-i18n="nav.writing">Writing</a>
+        <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
       </nav>
       <div class="nav-right">
+        <button class="lang-toggle" aria-label="Switch language (EN / বাংলা)" title="Switch language">
+          <span class="lang-opt lang-en active">EN</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-opt lang-bn">বাং</span>
+        </button>
         <button class="theme-toggle" aria-label="Switch to dark mode">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -46,15 +60,23 @@
 
   <div class="mobile-nav" aria-hidden="true">
     <div class="mobile-nav-header">
-      <a href="./" class="site-logo">Chitrons Archive</a>
-      <button class="mobile-nav-close" aria-label="Close menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <a href="./" class="site-logo">Chitron's Archive</a>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="lang-toggle mobile-lang-toggle" aria-label="Switch language (EN / বাংলা)">
+          <span class="lang-opt lang-en active">EN</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-opt lang-bn">বাং</span>
+        </button>
+        <button class="mobile-nav-close" aria-label="Close menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
     </div>
     <nav aria-label="Mobile navigation">
-      <a href="./">Home</a>
-      <a href="./about.html">About</a>
-      <a href="./writing.html" class="active">Writing</a>
+      <a href="./" data-i18n="nav.home">Home</a>
+      <a href="./about.html" data-i18n="nav.about">About</a>
+      <a href="./writing.html" class="active" data-i18n="nav.writing">Writing</a>
+      <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
     </nav>
   </div>
 
@@ -62,9 +84,9 @@
     <article>
       <div class="container container--narrow" style="padding-top:20px;">
         <nav class="breadcrumb-nav" id="article-breadcrumbs" aria-label="Breadcrumbs" style="margin-bottom:16px;font-size:13px;color:var(--text-tertiary);">
-          <a href="./" style="color:var(--text-secondary);">Home</a>
+          <a href="./" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
           <span style="margin:0 6px;">/</span>
-          <a href="./writing.html" style="color:var(--text-secondary);">Writing</a>
+          <a href="./writing.html" style="color:var(--text-secondary);" data-i18n="bc.writing">Writing</a>
           <span style="margin:0 6px;">/</span>
           <span id="breadcrumb-current-title" aria-current="page" style="color:var(--text);">Article</span>
         </nav>
@@ -73,7 +95,7 @@
       <header class="article-header container container--narrow">
         <a href="./writing.html" class="back-link">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          Back to Writing
+          <span data-i18n="post.backToWriting">Back to Writing</span>
         </a>
         <div class="article-meta">
           <span class="category" id="article-category"></span>
@@ -90,7 +112,7 @@
       </header>
 
       <div class="article-body container container--narrow" id="article-body">
-        <div class="loading">Loading article...</div>
+        <div class="loading" data-i18n="post.loading">Loading article...</div>
       </div>
 
       <nav id="post-nav" class="post-nav container container--narrow" aria-label="Article navigation"></nav>
@@ -101,17 +123,19 @@
     <div class="container container--narrow">
       <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
       <div class="footer-links">
-        <a href="./">Home</a>
-        <a href="./about.html">About</a>
-        <a href="./writing.html">Writing</a>
-        <a href="./feed.xml">RSS</a>
-        <a href="./sitemap.xml">Sitemap</a>
+        <a href="./" data-i18n="footer.home">Home</a>
+        <a href="./about.html" data-i18n="footer.about">About</a>
+        <a href="./writing.html" data-i18n="footer.writing">Writing</a>
+        <a href="./gallery.html" data-i18n="footer.gallery">Gallery</a>
+        <a href="./feed.xml" data-i18n="footer.rss">RSS</a>
+        <a href="./sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
       </div>
     </div>
   </footer>
 
   <script src="./js/config.js"></script>
   <script src="./js/api.js"></script>
+  <script src="./js/i18n.js"></script>
   <script src="./js/main.js"></script>
   <script src="./js/post.js"></script>
 </body>

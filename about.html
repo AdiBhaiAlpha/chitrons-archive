@@ -3,22 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>About Chitron Bhattacharjee — AI Developer & Programmer | Chitrons Archive</title>
+  <title>About Chitron Bhattacharjee — AI Developer &amp; Programmer | Chitron's Archive</title>
   <meta name="description" content="Learn about Chitron Bhattacharjee, an AI developer and programmer from Bangladesh. Explore his projects like ShiPu AI, technical background, skills, and philosophy.">
   <link rel="canonical" href="https://chitron.iam.bd/about.html">
-  <meta name="robots" content="index, follow">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="Chitron Bhattacharjee">
 
   <meta property="og:type" content="profile">
-  <meta property="og:title" content="About Chitron Bhattacharjee — AI Developer & Programmer">
-  <meta property="og:description" content="AI developer, programmer, designer, and writer from Bangladesh. Creator of ShiPu AI and Chitrons Archive.">
+  <meta property="og:title" content="About Chitron Bhattacharjee — AI Developer &amp; Programmer | Chitron's Archive">
+  <meta property="og:description" content="AI developer, programmer, designer, and writer from Bangladesh. Creator of ShiPu AI and Chitron's Archive.">
   <meta property="og:url" content="https://chitron.iam.bd/about.html">
-  <meta property="og:site_name" content="Chitrons Archive">
+  <meta property="og:site_name" content="Chitron's Archive">
   <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png">
 
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="About Chitron Bhattacharjee | Chitrons Archive">
-  <meta name="twitter:description" content="AI developer, programmer, designer and writer from Bangladesh.">
+  <meta name="twitter:title" content="About Chitron Bhattacharjee | Chitron's Archive">
+  <meta name="twitter:description" content="AI developer, programmer, designer and writer from Bangladesh. Creator of ShiPu AI and Chitron's Archive.">
+  <meta name="twitter:image" content="https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png">
 
   <script type="application/ld+json">
   {
@@ -43,7 +45,7 @@
         },
         {
           "@type": "Organization",
-          "name": "Chitrons Archive",
+          "name": "Chitron's Archive",
           "url": "https://chitron.iam.bd/"
         }
       ],
@@ -59,10 +61,10 @@
   {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "Chitrons Archive",
+    "name": "Chitron's Archive",
     "alternateName": "ShiPu AI",
     "url": "https://chitron.iam.bd/",
-    "logo": "https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png",
+    "logo": "https://chitron.iam.bd/favicon.png",
     "description": "Personal digital archive, AI projects, and technology publications by Chitron Bhattacharjee.",
     "founder": {
       "@type": "Person",
@@ -97,19 +99,31 @@
   }
   </script>
   <link rel="stylesheet" href="./css/style.css">
-  <link rel="alternate" type="application/rss+xml" title="Chitrons Archive RSS Feed" href="./feed.xml">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="./feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
 </head>
 <body>
   <header class="site-header">
     <div class="container">
-      <a href="./" class="site-logo">Chitrons Archive</a>
+      <a href="./" class="site-logo">Chitron's Archive</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="./">Home</a>
-        <a href="./about.html" class="active">About</a>
-        <a href="./writing.html">Writing</a>
+        <a href="./" data-i18n="nav.home">Home</a>
+        <a href="./about.html" class="active" data-i18n="nav.about">About</a>
+        <a href="./writing.html" data-i18n="nav.writing">Writing</a>
+        <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
       </nav>
       <div class="nav-right">
+        <button class="lang-toggle" aria-label="Switch language (EN / বাংলা)" title="Switch language">
+          <span class="lang-opt lang-en active">EN</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-opt lang-bn">বাং</span>
+        </button>
         <button class="theme-toggle" aria-label="Switch to dark mode">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -122,31 +136,39 @@
 
   <div class="mobile-nav" aria-hidden="true">
     <div class="mobile-nav-header">
-      <a href="./" class="site-logo">Chitrons Archive</a>
-      <button class="mobile-nav-close" aria-label="Close menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <a href="./" class="site-logo">Chitron's Archive</a>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="lang-toggle mobile-lang-toggle" aria-label="Switch language (EN / বাংলা)">
+          <span class="lang-opt lang-en active">EN</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-opt lang-bn">বাং</span>
+        </button>
+        <button class="mobile-nav-close" aria-label="Close menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
     </div>
     <nav aria-label="Mobile navigation">
-      <a href="./">Home</a>
-      <a href="./about.html" class="active">About</a>
-      <a href="./writing.html">Writing</a>
+      <a href="./" data-i18n="nav.home">Home</a>
+      <a href="./about.html" class="active" data-i18n="nav.about">About</a>
+      <a href="./writing.html" data-i18n="nav.writing">Writing</a>
+      <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
     </nav>
   </div>
 
   <main class="about-page">
     <div class="container container--narrow">
       <nav class="breadcrumb-nav" aria-label="Breadcrumbs" style="margin-bottom:16px;font-size:13px;color:var(--text-tertiary);">
-        <a href="./" style="color:var(--text-secondary);">Home</a>
+        <a href="./" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
         <span style="margin:0 6px;">/</span>
-        <span aria-current="page" style="color:var(--text);">About</span>
+        <span aria-current="page" style="color:var(--text);" data-i18n="bc.about">About</span>
       </nav>
 
       <section class="about-intro">
         <img id="about-profile-image" src="https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png" alt="Chitron Bhattacharjee" class="profile-image" loading="lazy">
         <div>
-          <h1 id="about-headline">Hi, I’m Chitron Bhattacharjee.</h1>
-          <div id="about-short-bio">
+          <h1 id="about-headline" data-i18n="about.headline">Hi, I’m Chitron Bhattacharjee.</h1>
+          <div id="about-short-bio" data-i18n-html="about.shortBio">
             <p>I’m an AI developer, programmer, and writer from Bangladesh. I enjoy building things with technology, especially AI-powered systems, web applications, and tools that solve real problems in a simple way.</p>
             <p>I’m always interested in learning how things work behind the scenes and turning ideas into something people can actually use.</p>
           </div>
@@ -154,15 +176,15 @@
       </section>
 
       <section class="about-section" id="section-bio">
-        <h2>About</h2>
-        <div id="about-biography">
+        <h2 data-i18n="about.secAbout">About</h2>
+        <div id="about-biography" data-i18n-html="about.bio">
           <p>I work with modern web technologies and enjoy experimenting with AI, automation, and conversational systems. Most of my time goes into building projects, improving my skills, and exploring new ideas in technology.</p>
           <p>I also enjoy writing. Sometimes I write about technology, sometimes about ideas and experiences, and sometimes simply to put thoughts into words.</p>
         </div>
       </section>
 
       <section class="about-section" id="section-roles">
-        <h2>What I Do</h2>
+        <h2 data-i18n="about.secRoles">What I Do</h2>
         <ul id="about-roles" class="bullet-list">
           <li>Build AI-powered applications and conversational systems</li>
           <li>Develop full-stack web applications</li>
@@ -173,7 +195,7 @@
       </section>
 
       <section class="about-section" id="section-projects">
-        <h2>Selected Projects</h2>
+        <h2 data-i18n="about.secProjects">Selected Projects</h2>
         <div class="project-list" id="about-projects">
           <div class="project-item">
             <h3>ShiPu AI</h3>
@@ -184,8 +206,8 @@
       </section>
 
       <section class="about-section" id="section-skills">
-        <h2>Technology</h2>
-        <p id="about-skills-intro">I regularly work with technologies such as:</p>
+        <h2 data-i18n="about.secSkills">Technology</h2>
+        <p id="about-skills-intro" data-i18n="about.skillsIntro">I regularly work with technologies such as:</p>
         <ul class="bullet-list" id="about-skills">
           <li>JavaScript</li>
           <li>Node.js</li>
@@ -194,12 +216,12 @@
           <li>PHP</li>
           <li>HTML & CSS</li>
         </ul>
-        <p id="about-skills-outro" style="margin-top:14px;">I’m particularly interested in backend systems, AI integration, APIs, automation, and building fast web applications.</p>
+        <p id="about-skills-outro" data-i18n="about.skillsOutro" style="margin-top:14px;">I’m particularly interested in backend systems, AI integration, APIs, automation, and building fast web applications.</p>
       </section>
 
       <section class="about-section" id="section-interests">
-        <h2>Interests</h2>
-        <p id="about-interests-intro">My main interests include:</p>
+        <h2 data-i18n="about.secInterests">Interests</h2>
+        <p id="about-interests-intro" data-i18n="about.interestsIntro">My main interests include:</p>
         <ul class="bullet-list" id="about-interests">
           <li>Artificial Intelligence</li>
           <li>Programming</li>
@@ -212,31 +234,31 @@
       </section>
 
       <section class="about-section" id="section-writing">
-        <h2>Writing</h2>
-        <div id="about-writing">
+        <h2 data-i18n="about.secWriting">Writing</h2>
+        <div id="about-writing" data-i18n-html="about.writingDesc">
           <p>Writing gives me another way to explore and share ideas. Here you'll find a mix of reflective writing, technical notes, experiments, and thoughts about technology and the things I learn while building.</p>
         </div>
-        <p style="margin-top:14px;"><a href="./writing.html" class="read-writing-link" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--text);text-decoration:underline;text-underline-offset:3px;">Read my writing &rarr;</a></p>
+        <p style="margin-top:14px;"><a href="./writing.html" class="read-writing-link" data-i18n="about.readWriting" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--text);text-decoration:underline;text-underline-offset:3px;">Read my writing &rarr;</a></p>
       </section>
 
       <section class="about-section" id="section-philosophy">
-        <h2>Philosophy</h2>
-        <div id="about-philosophy">
+        <h2 data-i18n="about.secPhilosophy">Philosophy</h2>
+        <div id="about-philosophy" data-i18n-html="about.philosophy">
           <p>I believe good software does not need to be unnecessarily complicated. I prefer things that are simple, fast, practical, and easy to understand.</p>
           <p>Whether I’m building a small tool or working on a larger project, I try to focus on making it useful first. Technology should solve problems, not create more of them.</p>
         </div>
       </section>
 
       <section class="about-section" id="section-currently">
-        <h2>Currently</h2>
-        <div id="about-current">
+        <h2 data-i18n="about.secCurrently">Currently</h2>
+        <div id="about-current" data-i18n-html="about.currently">
           <p>Right now, I’m working on AI-related projects, conversational systems, and personal web platforms. I’m also continuing to learn and experiment with new technologies as I build.</p>
         </div>
       </section>
 
       <section class="about-section" id="section-contact">
-        <h2>Contact</h2>
-        <div id="about-contact-intro">
+        <h2 data-i18n="about.secContact">Contact</h2>
+        <div id="about-contact-intro" data-i18n-html="about.contactIntro">
           <p>You can find me on GitHub and social media. Feel free to explore my work, read what I write, or connect with me online.</p>
         </div>
         <div class="contact-links" id="about-contact" style="margin-top:14px;">
@@ -262,17 +284,19 @@
     <div class="container container--narrow">
       <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
       <div class="footer-links">
-        <a href="./">Home</a>
-        <a href="./about.html">About</a>
-        <a href="./writing.html">Writing</a>
-        <a href="./feed.xml">RSS</a>
-        <a href="./sitemap.xml">Sitemap</a>
+        <a href="./" data-i18n="footer.home">Home</a>
+        <a href="./about.html" data-i18n="footer.about">About</a>
+        <a href="./writing.html" data-i18n="footer.writing">Writing</a>
+        <a href="./gallery.html" data-i18n="footer.gallery">Gallery</a>
+        <a href="./feed.xml" data-i18n="footer.rss">RSS</a>
+        <a href="./sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
       </div>
     </div>
   </footer>
 
   <script src="./js/config.js"></script>
   <script src="./js/api.js"></script>
+  <script src="./js/i18n.js"></script>
   <script src="./js/main.js"></script>
   <script src="./js/about.js"></script>
 </body>

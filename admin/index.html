@@ -80,6 +80,13 @@
           </button>
         </div>
         <div class="sidebar-section">
+          <div class="sidebar-section-title">Media & Assets</div>
+          <button class="sidebar-link" data-view="gallery" id="sidebar-gallery-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Gallery
+          </button>
+        </div>
+        <div class="sidebar-section">
           <div class="sidebar-section-title">Manage</div>
           <button class="sidebar-link" data-view="labels">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -428,6 +435,156 @@
             <div style="margin-top:16px">
               <button class="btn btn-primary btn-sm" id="settings-save">Save Settings</button>
             </div>
+          </div>
+        </div>
+
+        <!-- GALLERY VIEW -->
+        <div id="view-gallery" class="admin-view" style="display:none">
+          <!-- Gallery Top Bar & Stats -->
+          <div class="gallery-topbar">
+            <div>
+              <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Photo Gallery</h2>
+              <div class="gallery-stat-counts" id="gallery-stat-counts" style="font-size:13px;color:var(--text-tertiary)">
+                Loading photos...
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary btn-sm" id="btn-toggle-gallery-upload">+ Upload / Add Photo</button>
+            </div>
+          </div>
+
+          <!-- Add / Upload Photo Card -->
+          <div class="editor-card gallery-upload-panel" id="gallery-upload-card" style="display:none;margin-top:16px">
+            <div class="editor-card-header">
+              <span id="gallery-form-heading">Upload New Photo</span>
+              <button class="btn btn-ghost btn-sm" id="gallery-upload-close" style="padding:2px 6px;font-size:16px">&times;</button>
+            </div>
+            <div class="editor-card-body">
+              <form id="gallery-upload-form">
+                <!-- ImgBB Upload Area -->
+                <div class="gallery-upload-box">
+                  <div class="imgbb-badge">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    ImgBB Cloud Storage API Integration
+                  </div>
+                  <div class="gallery-dropzone" id="gallery-dropzone">
+                    <input type="file" id="gallery-file-input" accept="image/png, image/jpeg, image/webp, image/gif" style="display:none">
+                    <div class="dropzone-content">
+                      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <div class="dropzone-text">
+                        <strong>Click to select an image</strong> or drag and drop file here
+                      </div>
+                      <div class="dropzone-hint">PNG, JPG, WEBP, or GIF (Uploaded directly via ImgBB API)</div>
+                    </div>
+                  </div>
+                  <div class="upload-progress-container" id="gallery-upload-progress" style="display:none">
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar-fill" id="gallery-progress-fill"></div>
+                    </div>
+                    <div class="progress-status-text" id="gallery-progress-text">Uploading to ImgBB...</div>
+                  </div>
+                </div>
+
+                <div class="gallery-form-grid" style="margin-top:16px">
+                  <div class="gallery-form-left">
+                    <div class="field">
+                      <label for="gallery-photo-title">Title *</label>
+                      <input type="text" id="gallery-photo-title" placeholder="e.g. Workspace Architecture" required>
+                    </div>
+                    <div class="field">
+                      <label for="gallery-photo-url">Image URL * (Auto-filled on ImgBB upload)</label>
+                      <input type="url" id="gallery-photo-url" placeholder="https://i.ibb.co/..." required>
+                    </div>
+                    <div class="field">
+                      <label for="gallery-photo-caption">Caption / Story</label>
+                      <textarea id="gallery-photo-caption" rows="2" placeholder="Brief note or story behind this photo"></textarea>
+                    </div>
+                    <div class="field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                      <div class="field">
+                        <label for="gallery-photo-category">Category</label>
+                        <input type="text" id="gallery-photo-category" placeholder="Photography" list="gallery-category-options">
+                        <datalist id="gallery-category-options">
+                          <option value="Photography">
+                          <option value="Portrait">
+                          <option value="Workspace">
+                          <option value="Projects">
+                          <option value="Nature">
+                          <option value="Architecture">
+                          <option value="Life">
+                        </datalist>
+                      </div>
+                      <div class="field">
+                        <label for="gallery-photo-location">Location</label>
+                        <input type="text" id="gallery-photo-location" placeholder="e.g. Sylhet, Bangladesh">
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="gallery-photo-tags">Tags (comma-separated)</label>
+                      <input type="text" id="gallery-photo-tags" placeholder="e.g. nature, workspace, coding">
+                    </div>
+                  </div>
+
+                  <div class="gallery-form-right">
+                    <div class="field">
+                      <label>Image Preview</label>
+                      <div class="gallery-preview-container" id="gallery-preview-container">
+                        <div class="preview-empty" id="gallery-preview-empty">No image selected</div>
+                        <img src="" alt="Preview" id="gallery-preview-img" style="display:none">
+                      </div>
+                    </div>
+                    <div class="field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                      <div class="field">
+                        <label for="gallery-photo-status">Status</label>
+                        <select id="gallery-photo-status">
+                          <option value="published">Published</option>
+                          <option value="draft">Draft</option>
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label for="gallery-photo-order">Display Order</label>
+                        <input type="number" id="gallery-photo-order" value="0" min="0">
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="gallery-photo-alt">Alt Text</label>
+                      <input type="text" id="gallery-photo-alt" placeholder="Descriptive text for accessibility">
+                    </div>
+                    <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:12px">
+                      <input type="checkbox" id="gallery-photo-featured" class="admin-checkbox">
+                      <label for="gallery-photo-featured" style="margin-bottom:0;cursor:pointer">Featured in Gallery & Highlights</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="gallery-form-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-light)">
+                  <button type="button" class="btn btn-ghost btn-sm" id="gallery-form-cancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary btn-sm" id="gallery-form-submit">Save Photo to Database</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Gallery Filters & Search -->
+          <div class="gallery-filter-bar" style="margin-top:20px;margin-bottom:16px">
+            <div class="gallery-search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="search" id="gallery-search-input" placeholder="Search title, caption, location, tags...">
+            </div>
+            <div class="gallery-filters-group">
+              <select id="gallery-filter-category" aria-label="Filter by category">
+                <option value="all">All Categories</option>
+              </select>
+              <select id="gallery-filter-status" aria-label="Filter by status">
+                <option value="all">All Statuses</option>
+                <option value="published">Published</option>
+                <option value="draft">Drafts</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Gallery Grid Cards -->
+          <div class="gallery-admin-grid" id="gallery-grid">
+            <div class="loading" style="grid-column:1/-1;padding:40px 0;text-align:center">Loading gallery photos...</div>
           </div>
         </div>
       </div>

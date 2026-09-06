@@ -11,6 +11,10 @@
   let isDirty = false;
   let autosaveTimer = null;
   let postTags = [];
+  const IMGBB_API_KEY = '3601399f318b007db7c3a8fdf499d8d0';
+  let editingGalleryId = null;
+  let galleryPhotosCache = [];
+  let gallerySearchDebounce = null;
 
   /* --- Helpers --- */
   function $(sel) { return document.querySelector(sel); }
@@ -78,7 +82,7 @@
       ? $(`.sidebar-link[data-view="${view}"][data-filter="${filter || ''}"]`)
       : $(`.sidebar-link[data-view="${view}"]`);
     if (activeLink) activeLink.classList.add('active');
-    const titles = { dashboard: 'Dashboard', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels', 'content-homepage': 'Homepage Content', 'content-about': 'About Content', 'content-settings': 'Site Settings' };
+    const titles = { dashboard: 'Dashboard', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels', 'content-homepage': 'Homepage Content', 'content-about': 'About Content', 'content-settings': 'Site Settings', gallery: 'Photo Gallery' };
     $('#topbar-title').textContent = titles[view] || view;
     if (view === 'dashboard') loadDashboard();
     else if (view === 'posts') loadPostsList();
@@ -86,6 +90,7 @@
     else if (view === 'content-homepage') loadHomepageEditor();
     else if (view === 'content-about') loadAboutEditor();
     else if (view === 'content-settings') loadSettingsEditor();
+    else if (view === 'gallery') loadGallery();
     const contentEl = $('.admin-content');
     if (contentEl) contentEl.scrollTop = 0;
     closeSidebar();
@@ -567,6 +572,389 @@
     }
   }
 
+  /* --- Gallery Management (ImgBB Integration & Photo CRUD) --- */
+  async function loadGallery() {
+    const grid = $('#gallery-grid');
+    if (!grid) return;
+
+    try {
+      const search = $('#gallery-search-input')?.value.trim() || '';
+      const status = $('#gallery-filter-status')?.value || 'all';
+      const category = $('#gallery-filter-category')?.value || 'all';
+
+      const data = await API.adminGetGallery({ search, status, category });
+      galleryPhotosCache = data.photos || [];
+
+      // Update Category Dropdown while preserving selection
+      updateGalleryCategoryOptions(data.categories || [], category);
+
+      // Update Top Stats
+      const total = data.total || galleryPhotosCache.length;
+      const published = galleryPhotosCache.filter(p => p.status === 'published').length;
+      const drafts = galleryPhotosCache.filter(p => p.status === 'draft').length;
+      const statsEl = $('#gallery-stat-counts');
+      if (statsEl) {
+        statsEl.textContent = `${total} photo${total === 1 ? '' : 's'} in database (${published} published, ${drafts} drafts)`;
+      }
+
+      renderGalleryGrid(galleryPhotosCache);
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired. Please log in again.', 'error');
+        showLogin();
+      } else {
+        grid.innerHTML = `<div class="gallery-empty-state"><p style="color:#c0392b">Failed to load gallery photos: ${esc(e.message)}</p><button class="btn btn-sm btn-ghost" onclick="loadGallery()">Retry</button></div>`;
+      }
+    }
+  }
+
+  function updateGalleryCategoryOptions(categories, selectedCategory) {
+    const select = $('#gallery-filter-category');
+    if (!select) return;
+    
+    // Extract unique categories from current photos cache as well
+    const allCategories = Array.from(new Set([
+      ...categories,
+      ...galleryPhotosCache.map(p => p.category).filter(Boolean)
+    ])).sort();
+
+    let html = '<option value="all">All Categories</option>';
+    allCategories.forEach(cat => {
+      const isSelected = selectedCategory === cat ? ' selected' : '';
+      html += `<option value="${esc(cat)}"${isSelected}>${esc(cat)}</option>`;
+    });
+    select.innerHTML = html;
+  }
+
+  function renderGalleryGrid(photos) {
+    const grid = $('#gallery-grid');
+    if (!grid) return;
+
+    if (!photos || photos.length === 0) {
+      grid.innerHTML = `
+        <div class="gallery-empty-state">
+          <svg style="width:40px;height:40px;margin:0 auto 10px;color:var(--text-tertiary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <div style="font-weight:600;font-size:14px">No photos found</div>
+          <p>There are no photos matching your criteria. Upload a new image to get started.</p>
+          <button class="btn btn-primary btn-sm" id="empty-state-upload-btn">+ Upload New Photo</button>
+        </div>
+      `;
+      const emptyBtn = $('#empty-state-upload-btn');
+      if (emptyBtn) emptyBtn.addEventListener('click', () => openGalleryUploadForm());
+      return;
+    }
+
+    grid.innerHTML = photos.map(photo => {
+      const statusClass = photo.status === 'published' ? 'published' : 'draft';
+      const isFeatured = photo.featured;
+      const dateStr = photo.date ? formatDate(photo.date) : '';
+      const tagsList = Array.isArray(photo.tags) ? photo.tags.join(', ') : (photo.tags || '');
+
+      return `
+        <div class="gallery-card" data-id="${photo._id}">
+          <div class="gallery-card-thumb">
+            <img src="${esc(photo.url)}" alt="${esc(photo.alt || photo.title)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23eee%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 fill=%22%23999%22 dy=%22.3em%22>Image Error</text></svg>'">
+            <div class="gallery-card-badges">
+              <span class="status-badge ${statusClass}">${photo.status}</span>
+              ${isFeatured ? '<span class="gallery-card-badge featured">★ Featured</span>' : ''}
+              ${photo.category ? `<span class="gallery-card-badge category">${esc(photo.category)}</span>` : ''}
+            </div>
+          </div>
+          <div class="gallery-card-body">
+            <div class="gallery-card-title" title="${esc(photo.title)}">${esc(photo.title)}</div>
+            <div class="gallery-card-meta">
+              ${dateStr ? `<span>${dateStr}</span>` : ''}
+              ${photo.location ? `<span>• ${esc(photo.location)}</span>` : ''}
+            </div>
+            ${photo.caption ? `<div class="gallery-card-caption">${esc(photo.caption)}</div>` : '<div class="gallery-card-caption" style="color:var(--text-tertiary);font-style:italic">No caption</div>'}
+            ${tagsList ? `<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Tags: ${esc(tagsList)}</div>` : ''}
+            <div class="gallery-card-actions">
+              <button type="button" class="gallery-action-edit" data-id="${photo._id}">Edit</button>
+              <button type="button" class="gallery-action-toggle" data-id="${photo._id}" data-status="${photo.status}">
+                ${photo.status === 'published' ? 'Unpublish' : 'Publish'}
+              </button>
+              <button type="button" class="gallery-action-copy" data-url="${esc(photo.url)}">Copy URL</button>
+              <span style="flex:1"></span>
+              <button type="button" class="delete-btn gallery-action-delete" data-id="${photo._id}">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach Action Listeners
+    $$('.gallery-action-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const photo = galleryPhotosCache.find(p => p._id === id);
+        if (photo) openGalleryUploadForm(photo);
+      });
+    });
+
+    $$('.gallery-action-toggle').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.dataset.id;
+        const currentStatus = e.currentTarget.dataset.status;
+        await toggleGalleryPhotoStatus(id, currentStatus);
+      });
+    });
+
+    $$('.gallery-action-copy').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const url = e.currentTarget.dataset.url;
+        if (url) {
+          navigator.clipboard.writeText(url).then(() => {
+            toast('Image URL copied to clipboard', 'success');
+          }).catch(() => {
+            toast('Failed to copy URL', 'error');
+          });
+        }
+      });
+    });
+
+    $$('.gallery-action-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        deleteGalleryPhoto(id);
+      });
+    });
+  }
+
+  function openGalleryUploadForm(photoToEdit = null) {
+    const card = $('#gallery-upload-card');
+    const heading = $('#gallery-form-heading');
+    const form = $('#gallery-upload-form');
+    const previewImg = $('#gallery-preview-img');
+    const previewEmpty = $('#gallery-preview-empty');
+
+    if (!card || !form) return;
+
+    if (photoToEdit) {
+      editingGalleryId = photoToEdit._id;
+      if (heading) heading.textContent = `Edit Photo: ${photoToEdit.title || ''}`;
+      $('#gallery-photo-title').value = photoToEdit.title || '';
+      $('#gallery-photo-url').value = photoToEdit.url || '';
+      $('#gallery-photo-caption').value = photoToEdit.caption || '';
+      $('#gallery-photo-category').value = photoToEdit.category || 'Photography';
+      $('#gallery-photo-location').value = photoToEdit.location || '';
+      $('#gallery-photo-tags').value = Array.isArray(photoToEdit.tags) ? photoToEdit.tags.join(', ') : (photoToEdit.tags || '');
+      $('#gallery-photo-alt').value = photoToEdit.alt || '';
+      $('#gallery-photo-status').value = photoToEdit.status || 'published';
+      $('#gallery-photo-order').value = photoToEdit.order !== undefined ? photoToEdit.order : 0;
+      $('#gallery-photo-featured').checked = !!photoToEdit.featured;
+      $('#gallery-form-submit').textContent = 'Update Photo';
+
+      if (photoToEdit.url) {
+        previewImg.src = photoToEdit.url;
+        previewImg.style.display = 'block';
+        previewEmpty.style.display = 'none';
+      } else {
+        previewImg.style.display = 'none';
+        previewEmpty.style.display = 'block';
+      }
+    } else {
+      resetGalleryForm();
+      if (heading) heading.textContent = 'Upload New Photo';
+      $('#gallery-form-submit').textContent = 'Save Photo to Database';
+    }
+
+    card.style.display = 'block';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function resetGalleryForm() {
+    editingGalleryId = null;
+    const form = $('#gallery-upload-form');
+    if (form) form.reset();
+    $('#gallery-photo-status').value = 'published';
+    $('#gallery-photo-order').value = 0;
+    $('#gallery-photo-category').value = 'Photography';
+    $('#gallery-photo-featured').checked = false;
+    const previewImg = $('#gallery-preview-img');
+    const previewEmpty = $('#gallery-preview-empty');
+    if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
+    if (previewEmpty) previewEmpty.style.display = 'block';
+    const progress = $('#gallery-upload-progress');
+    if (progress) progress.style.display = 'none';
+    const heading = $('#gallery-form-heading');
+    if (heading) heading.textContent = 'Upload New Photo';
+    const submitBtn = $('#gallery-form-submit');
+    if (submitBtn) submitBtn.textContent = 'Save Photo to Database';
+  }
+
+  async function uploadImageToImgBB(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast('Please select a valid image file (JPG, PNG, WEBP, GIF)', 'error');
+      return;
+    }
+
+    // Max 32MB limit for ImgBB
+    if (file.size > 32 * 1024 * 1024) {
+      toast('Image file exceeds the 32MB limit', 'error');
+      return;
+    }
+
+    const progressContainer = $('#gallery-upload-progress');
+    const progressBar = $('#gallery-progress-fill');
+    const progressText = $('#gallery-progress-text');
+    const previewImg = $('#gallery-preview-img');
+    const previewEmpty = $('#gallery-preview-empty');
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressBar) progressBar.style.width = '30%';
+    if (progressText) progressText.textContent = `Uploading ${file.name} to ImgBB...`;
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      if (progressBar) progressBar.style.width = '60%';
+
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = 'Upload complete!';
+
+        const imageUrl = json.data.url;
+        $('#gallery-photo-url').value = imageUrl;
+
+        // Auto-generate title if empty
+        const titleInput = $('#gallery-photo-title');
+        if (titleInput && !titleInput.value.trim()) {
+          const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+          titleInput.value = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+        }
+
+        // Set preview
+        if (previewImg) {
+          previewImg.src = imageUrl;
+          previewImg.style.display = 'block';
+        }
+        if (previewEmpty) previewEmpty.style.display = 'none';
+
+        // Auto-fill Alt text if empty
+        const altInput = $('#gallery-photo-alt');
+        if (altInput && !altInput.value.trim()) {
+          altInput.value = titleInput.value || 'Gallery photo';
+        }
+
+        setTimeout(() => {
+          if (progressContainer) progressContainer.style.display = 'none';
+        }, 1200);
+
+        toast('Image uploaded to ImgBB successfully!', 'success');
+      } else {
+        const errMsg = json.error?.message || 'ImgBB upload failed';
+        if (progressContainer) progressContainer.style.display = 'none';
+        toast('ImgBB upload error: ' + errMsg, 'error');
+      }
+    } catch (err) {
+      if (progressContainer) progressContainer.style.display = 'none';
+      toast('Failed to upload image: ' + (err.message || 'Network error'), 'error');
+    }
+  }
+
+  async function handleGalleryFormSubmit(e) {
+    e.preventDefault();
+
+    const title = $('#gallery-photo-title').value.trim();
+    const url = $('#gallery-photo-url').value.trim();
+    const caption = $('#gallery-photo-caption').value.trim();
+    const category = $('#gallery-photo-category').value.trim() || 'Photography';
+    const location = $('#gallery-photo-location').value.trim();
+    const tagsRaw = $('#gallery-photo-tags').value.trim();
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
+    const alt = $('#gallery-photo-alt').value.trim() || title;
+    const status = $('#gallery-photo-status').value || 'published';
+    const order = parseInt($('#gallery-photo-order').value, 10) || 0;
+    const featured = $('#gallery-photo-featured').checked;
+
+    if (!title) {
+      toast('Please enter a photo title', 'error');
+      $('#gallery-photo-title').focus();
+      return;
+    }
+
+    if (!url) {
+      toast('Please upload an image or enter an image URL', 'error');
+      $('#gallery-photo-url').focus();
+      return;
+    }
+
+    const payload = {
+      title,
+      url,
+      caption,
+      category,
+      tags,
+      location,
+      alt,
+      status,
+      order,
+      featured
+    };
+
+    try {
+      if (editingGalleryId) {
+        await API.adminUpdateGalleryPhoto(editingGalleryId, payload);
+        toast('Photo updated successfully', 'success');
+      } else {
+        await API.adminCreateGalleryPhoto(payload);
+        toast('Photo added to gallery', 'success');
+      }
+
+      resetGalleryForm();
+      $('#gallery-upload-card').style.display = 'none';
+      await loadGallery();
+    } catch (err) {
+      if (err.message && err.message.toLowerCase().includes('unauthorized')) {
+        toast('Session expired. Please log in again.', 'error');
+        showLogin();
+      } else {
+        toast('Failed to save photo: ' + (err.message || ''), 'error');
+      }
+    }
+  }
+
+  async function toggleGalleryPhotoStatus(id, currentStatus) {
+    try {
+      if (currentStatus === 'published') {
+        await API.adminUnpublishGalleryPhoto(id);
+        toast('Photo moved to drafts', 'success');
+      } else {
+        await API.adminPublishGalleryPhoto(id);
+        toast('Photo published to gallery', 'success');
+      }
+      await loadGallery();
+    } catch (err) {
+      toast('Failed to change status: ' + (err.message || ''), 'error');
+    }
+  }
+
+  function deleteGalleryPhoto(id) {
+    showModal(
+      'Delete Gallery Photo',
+      'Are you sure you want to permanently delete this photo from the database? This action cannot be undone.',
+      async () => {
+        try {
+          await API.adminDeleteGalleryPhoto(id);
+          toast('Photo deleted from gallery', 'success');
+          await loadGallery();
+        } catch (err) {
+          toast('Failed to delete photo: ' + (err.message || ''), 'error');
+        }
+      }
+    );
+  }
+
   /* --- Init --- */
   function init() {
     /* Login */
@@ -734,6 +1122,117 @@
     if (aboutSave) aboutSave.addEventListener('click', saveAboutEditor);
     const settingsSave = $('#settings-save');
     if (settingsSave) settingsSave.addEventListener('click', saveSettingsEditor);
+
+    /* Gallery Listeners (ImgBB Upload & CRUD) */
+    const btnToggleUpload = $('#btn-toggle-gallery-upload');
+    if (btnToggleUpload) {
+      btnToggleUpload.addEventListener('click', () => {
+        const card = $('#gallery-upload-card');
+        if (card.style.display === 'none' || !card.style.display) {
+          openGalleryUploadForm();
+        } else {
+          card.style.display = 'none';
+          resetGalleryForm();
+        }
+      });
+    }
+
+    const uploadCloseBtn = $('#gallery-upload-close');
+    if (uploadCloseBtn) {
+      uploadCloseBtn.addEventListener('click', () => {
+        $('#gallery-upload-card').style.display = 'none';
+        resetGalleryForm();
+      });
+    }
+
+    const formCancelBtn = $('#gallery-form-cancel');
+    if (formCancelBtn) {
+      formCancelBtn.addEventListener('click', () => {
+        $('#gallery-upload-card').style.display = 'none';
+        resetGalleryForm();
+      });
+    }
+
+    const galleryDropzone = $('#gallery-dropzone');
+    const galleryFileInput = $('#gallery-file-input');
+
+    if (galleryDropzone && galleryFileInput) {
+      galleryDropzone.addEventListener('click', () => {
+        galleryFileInput.click();
+      });
+
+      galleryFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          uploadImageToImgBB(e.target.files[0]);
+        }
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        galleryDropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          galleryDropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        galleryDropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          galleryDropzone.classList.remove('dragover');
+        });
+      });
+
+      galleryDropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files[0]) {
+          uploadImageToImgBB(dt.files[0]);
+        }
+      });
+    }
+
+    const galleryUrlInput = $('#gallery-photo-url');
+    if (galleryUrlInput) {
+      const updateUrlPreview = () => {
+        const val = galleryUrlInput.value.trim();
+        const previewImg = $('#gallery-preview-img');
+        const previewEmpty = $('#gallery-preview-empty');
+        if (val) {
+          if (previewImg) { previewImg.src = val; previewImg.style.display = 'block'; }
+          if (previewEmpty) previewEmpty.style.display = 'none';
+        } else {
+          if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
+          if (previewEmpty) previewEmpty.style.display = 'block';
+        }
+      };
+      galleryUrlInput.addEventListener('input', updateUrlPreview);
+      galleryUrlInput.addEventListener('change', updateUrlPreview);
+    }
+
+    const galleryUploadForm = $('#gallery-upload-form');
+    if (galleryUploadForm) {
+      galleryUploadForm.addEventListener('submit', handleGalleryFormSubmit);
+    }
+
+    const gallerySearchInput = $('#gallery-search-input');
+    if (gallerySearchInput) {
+      gallerySearchInput.addEventListener('input', () => {
+        clearTimeout(gallerySearchDebounce);
+        gallerySearchDebounce = setTimeout(() => {
+          loadGallery();
+        }, 300);
+      });
+    }
+
+    const galleryFilterCategory = $('#gallery-filter-category');
+    if (galleryFilterCategory) {
+      galleryFilterCategory.addEventListener('change', () => loadGallery());
+    }
+
+    const galleryFilterStatus = $('#gallery-filter-status');
+    if (galleryFilterStatus) {
+      galleryFilterStatus.addEventListener('change', () => loadGallery());
+    }
 
     /* Start autosave */
     startAutosave();

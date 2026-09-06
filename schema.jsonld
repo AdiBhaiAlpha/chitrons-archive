@@ -6,7 +6,8 @@
       "@type": "WebSite",
       "@id": "https://chitron.iam.bd/#website",
       "url": "https://chitron.iam.bd/",
-      "name": "Chitrons Archive",
+      "name": "Chitron's Archive",
+      "alternateName": "Chitron Archive",
       "description": "Personal digital archive, writing blog, and official website of Chitron Bhattacharjee.",
       "inLanguage": "en"
     },
@@ -15,7 +16,7 @@
       "@id": "https://chitron.iam.bd/#person",
       "name": "Chitron Bhattacharjee",
       "url": "https://chitron.iam.bd/",
-      "image": "YOUR_PROFILE_IMAGE_URL",
+      "image": "https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png",
       "jobTitle": [
         "AI Developer",
         "Programmer",

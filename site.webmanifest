@@ -1,0 +1,21 @@
+{
+  "name": "Chitron's Archive",
+  "short_name": "Chitron's Archive",
+  "description": "Personal digital archive, writing blog, and official website of Chitron Bhattacharjee.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

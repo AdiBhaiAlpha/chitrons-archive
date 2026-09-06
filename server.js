@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
@@ -6,6 +7,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 const crypto = require('crypto');
+const multer = require('multer');
 
 require('dotenv').config();
 
@@ -32,6 +34,38 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+/* --- Uploads Storage & Multer --- */
+const uploadsDir = path.join(__dirname, 'uploads', 'gallery');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = (path.extname(file.originalname) || '.jpg').toLowerCase();
+    const cleanOriginal = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
+    cb(null, `${cleanOriginal || 'photo'}-${unique}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files (JPEG, PNG, WEBP, GIF, SVG) are allowed'));
+    }
+  }
+});
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 /* --- Auth Token Management --- */
 const activeTokens = new Set();
 
@@ -53,6 +87,7 @@ const AboutProfile = require('./backend/models/AboutProfile');
 const Homepage = require('./backend/models/Homepage');
 const SiteSettings = require('./backend/models/SiteSettings');
 const Revision = require('./backend/models/Revision');
+const GalleryItem = require('./backend/models/GalleryItem');
 
 /* --- Seed Data Definitions --- */
 const initialPosts = [
@@ -172,14 +207,14 @@ const initialHomepage = {
 };
 
 const initialSettings = {
-  siteName: 'Chitrons Archive',
+  siteName: "Chitron's Archive",
   tagline: 'Notes, ideas, experiments and things worth remembering.',
   authorName: 'Chitron Bhattacharjee',
   authorTitle: 'AI Developer, Programmer & Writer',
   location: 'Bangladesh',
   profileImage: '',
   contactEmail: 'chitronbhattacharjee@gmail.com',
-  seoTitle: 'Chitron Bhattacharjee — AI Developer, Programmer & Writer | Chitrons Archive',
+  seoTitle: "Chitron Bhattacharjee — AI Developer, Programmer & Writer | Chitron's Archive",
   seoDescription: 'Personal digital archive of Chitron Bhattacharjee — AI developer, programmer, designer and writer from Bangladesh.',
   socialLinks: [
     { name: 'GitHub', url: 'https://github.com/AdiBhaiAlpha' },
@@ -187,8 +222,90 @@ const initialSettings = {
   ]
 };
 
+const initialGallery = [
+  {
+    title: 'Chitron Bhattacharjee',
+    caption: 'Official portrait and digital archive identity.',
+    url: 'https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png',
+    category: 'Portrait',
+    tags: ['portrait', 'founder', 'chitron'],
+    location: 'Sylhet, Bangladesh',
+    alt: 'Chitron Bhattacharjee portrait',
+    date: new Date('2025-01-10T12:00:00Z'),
+    featured: true,
+    status: 'published',
+    order: 1
+  },
+  {
+    title: 'Minimalist Workspace',
+    caption: 'Refining backend architectures and prompt chains in a calm, distraction-free environment.',
+    url: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=1200&auto=format&fit=crop',
+    category: 'Workspace',
+    tags: ['workspace', 'coding', 'minimalism'],
+    location: 'Bangladesh',
+    alt: 'Minimalist code workstation with laptop and notes',
+    date: new Date('2025-02-15T15:30:00Z'),
+    featured: true,
+    status: 'published',
+    order: 2
+  },
+  {
+    title: 'ShiPu AI Reasoning Core',
+    caption: 'Conversational state machines, Bengali prompt pipelines, and multi-step agent flow experiments.',
+    url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1200&auto=format&fit=crop',
+    category: 'Projects',
+    tags: ['shipu-ai', 'ai', 'research'],
+    location: 'Bangladesh',
+    alt: 'Digital matrix of code representing AI reasoning pipelines',
+    date: new Date('2025-02-28T18:20:00Z'),
+    featured: true,
+    status: 'published',
+    order: 3
+  },
+  {
+    title: 'Twilight Reflections',
+    caption: 'Quiet walks at dusk — observing reflections on water and clearing the mind after hours of debugging.',
+    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop',
+    category: 'Photography',
+    tags: ['twilight', 'nature', 'reflections'],
+    location: 'Sylhet, Bangladesh',
+    alt: 'Quiet evening twilight reflecting over tranquil waters',
+    date: new Date('2025-03-01T17:45:00Z'),
+    featured: false,
+    status: 'published',
+    order: 4
+  },
+  {
+    title: 'Notes, Schemas & Coffee',
+    caption: 'Drafting data models and database relations with pen and paper before writing any code.',
+    url: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=1200&auto=format&fit=crop',
+    category: 'Workspace',
+    tags: ['design', 'architecture', 'books'],
+    location: 'Sylhet, Bangladesh',
+    alt: 'Notebook, mechanical pencil, and books on a wooden desk',
+    date: new Date('2025-03-03T10:15:00Z'),
+    featured: false,
+    status: 'published',
+    order: 5
+  },
+  {
+    title: 'Night Sky & Quiet Hours',
+    caption: 'Late night coding sessions under clear starlit skies.',
+    url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop',
+    category: 'Photography',
+    tags: ['night', 'sky', 'solitude'],
+    location: 'Bangladesh',
+    alt: 'Vast serene night sky landscape',
+    date: new Date('2025-03-04T22:00:00Z'),
+    featured: false,
+    status: 'published',
+    order: 6
+  }
+];
+
 /* --- In-Memory State Fallback --- */
 let inMemoryPosts = initialPosts.map((p, i) => ({ ...p, _id: `mem-post-${i + 1}`, createdAt: new Date(), updatedAt: new Date() }));
+let inMemoryGallery = initialGallery.map((g, i) => ({ ...g, _id: `mem-photo-${i + 1}`, createdAt: g.date || new Date(), updatedAt: g.date || new Date() }));
 let inMemoryRevisions = [];
 let inMemoryAbout = { ...initialAbout };
 let inMemoryHomepage = { ...initialHomepage };
@@ -242,6 +359,14 @@ async function initMongoDB() {
     const existingSettings = await SiteSettings.findOne();
     if (!existingSettings) {
       await SiteSettings.create(initialSettings);
+    }
+
+    const galleryCount = await GalleryItem.countDocuments();
+    if (galleryCount === 0) {
+      console.log('Seeding initial gallery photos to MongoDB...');
+      for (const g of initialGallery) {
+        await GalleryItem.create(g);
+      }
     }
   } catch (err) {
     console.warn('MongoDB connection error, falling back to in-memory store:', err.message);
@@ -582,24 +707,160 @@ app.get('/api/about', (req, res) => {
   res.redirect(307, '/api/content/about');
 });
 
+/* --- Public Gallery Endpoints --- */
+app.get('/api/gallery', async (req, res) => {
+  try {
+    const { category, search, page = 1, limit = 24, sort = 'newest' } = req.query;
+    const pNum = Math.max(1, parseInt(page) || 1);
+    const lNum = Math.max(1, parseInt(limit) || 24);
+
+    if (isMongoConnected) {
+      const query = { status: 'published' };
+      if (category && category.toLowerCase() !== 'all') {
+        query.category = new RegExp('^' + category.trim() + '$', 'i');
+      }
+      if (search) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        query.$or = [
+          { title: searchRegex },
+          { caption: searchRegex },
+          { location: searchRegex },
+          { tags: searchRegex }
+        ];
+      }
+
+      const sortObj = sort === 'oldest' 
+        ? { date: 1, createdAt: 1 } 
+        : { featured: -1, order: 1, date: -1, createdAt: -1 };
+
+      const total = await GalleryItem.countDocuments(query);
+      const photos = await GalleryItem.find(query)
+        .sort(sortObj)
+        .skip((pNum - 1) * lNum)
+        .limit(lNum);
+
+      const rawCategories = await GalleryItem.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]);
+      const categories = rawCategories.map(c => ({ name: c._id || 'General', count: c.count }));
+
+      return res.json({
+        photos,
+        total,
+        page: pNum,
+        totalPages: Math.ceil(total / lNum) || 1,
+        categories
+      });
+    }
+
+    // In-memory fallback
+    let list = inMemoryGallery.filter(item => item.status === 'published');
+    if (category && category.toLowerCase() !== 'all') {
+      const catLower = category.trim().toLowerCase();
+      list = list.filter(item => (item.category || '').toLowerCase() === catLower);
+    }
+    if (search) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(item =>
+        (item.title || '').toLowerCase().includes(q) ||
+        (item.caption || '').toLowerCase().includes(q) ||
+        (item.location || '').toLowerCase().includes(q) ||
+        (item.tags || []).some(t => t.toLowerCase().includes(q))
+      );
+    }
+
+    if (sort === 'oldest') {
+      list.sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+    } else {
+      list.sort((a, b) => {
+        if (a.featured !== b.featured) return b.featured ? 1 : -1;
+        if ((a.order || 0) !== (b.order || 0)) return (a.order || 0) - (b.order || 0);
+        return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+      });
+    }
+
+    const catMap = {};
+    inMemoryGallery.filter(item => item.status === 'published').forEach(item => {
+      const c = item.category || 'General';
+      catMap[c] = (catMap[c] || 0) + 1;
+    });
+    const categories = Object.keys(catMap).map(name => ({ name, count: catMap[name] }));
+
+    const total = list.length;
+    const paginated = list.slice((pNum - 1) * lNum, pNum * lNum);
+
+    res.json({
+      photos: paginated,
+      total,
+      page: pNum,
+      totalPages: Math.ceil(total / lNum) || 1,
+      categories
+    });
+  } catch (err) {
+    console.error('Error fetching gallery photos:', err);
+    res.status(500).json({ error: 'Failed to fetch gallery photos' });
+  }
+});
+
+app.get('/api/gallery/categories', async (req, res) => {
+  try {
+    if (isMongoConnected) {
+      const raw = await GalleryItem.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]);
+      return res.json({ categories: raw.map(c => ({ name: c._id || 'General', count: c.count })) });
+    }
+    const catMap = {};
+    inMemoryGallery.filter(item => item.status === 'published').forEach(item => {
+      const c = item.category || 'General';
+      catMap[c] = (catMap[c] || 0) + 1;
+    });
+    res.json({ categories: Object.keys(catMap).map(name => ({ name, count: catMap[name] })) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+app.get('/api/gallery/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isMongoConnected) {
+      const photo = await GalleryItem.findById(id);
+      if (!photo) return res.status(404).json({ error: 'Photo not found' });
+      return res.json({ photo });
+    }
+    const photo = inMemoryGallery.find(item => item._id === id);
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch photo' });
+  }
+});
+
 /* --- Admin Stats & Posts --- */
 app.get('/api/admin/stats', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
     if (isMongoConnected) {
-      const [total, published, drafts, scheduled] = await Promise.all([
+      const [total, published, drafts, scheduled, totalPhotos] = await Promise.all([
         BlogPost.countDocuments({ status: { $ne: 'trashed' } }),
         BlogPost.countDocuments({ status: 'published' }),
         BlogPost.countDocuments({ status: 'draft' }),
-        BlogPost.countDocuments({ status: 'scheduled', scheduledAt: { $gt: now } })
+        BlogPost.countDocuments({ status: 'scheduled', scheduledAt: { $gt: now } }),
+        GalleryItem.countDocuments()
       ]);
-      return res.json({ total, published, drafts, scheduled });
+      return res.json({ total, published, drafts, scheduled, totalPhotos });
     }
     const total = inMemoryPosts.filter(p => p.status !== 'trashed').length;
     const published = inMemoryPosts.filter(p => p.status === 'published').length;
     const drafts = inMemoryPosts.filter(p => p.status === 'draft').length;
     const scheduled = inMemoryPosts.filter(p => p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) > now).length;
-    res.json({ total, published, drafts, scheduled });
+    const totalPhotos = inMemoryGallery.length;
+    res.json({ total, published, drafts, scheduled, totalPhotos });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
@@ -1177,6 +1438,297 @@ app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
   }
 });
 
+/* --- Admin Gallery Endpoints --- */
+app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
+  try {
+    const { search, status, category, page = 1, limit = 50 } = req.query;
+    const pNum = Math.max(1, parseInt(page) || 1);
+    const lNum = Math.max(1, parseInt(limit) || 50);
+
+    if (isMongoConnected) {
+      const query = {};
+      if (status && status !== 'all') query.status = status;
+      if (category && category !== 'all') query.category = new RegExp('^' + category.trim() + '$', 'i');
+      if (search) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        query.$or = [
+          { title: searchRegex },
+          { caption: searchRegex },
+          { location: searchRegex },
+          { tags: searchRegex }
+        ];
+      }
+
+      const total = await GalleryItem.countDocuments(query);
+      const photos = await GalleryItem.find(query)
+        .sort({ order: 1, date: -1, createdAt: -1 })
+        .skip((pNum - 1) * lNum)
+        .limit(lNum);
+      const categories = await GalleryItem.distinct('category');
+
+      return res.json({
+        photos,
+        total,
+        page: pNum,
+        totalPages: Math.ceil(total / lNum) || 1,
+        categories: categories.filter(Boolean)
+      });
+    }
+
+    let list = [...inMemoryGallery];
+    if (status && status !== 'all') {
+      list = list.filter(p => p.status === status);
+    }
+    if (category && category !== 'all') {
+      list = list.filter(p => (p.category || '').toLowerCase() === category.toLowerCase());
+    }
+    if (search) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(p =>
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.caption || '').toLowerCase().includes(q) ||
+        (p.location || '').toLowerCase().includes(q) ||
+        (p.tags || []).some(t => t.toLowerCase().includes(q))
+      );
+    }
+
+    list.sort((a, b) => (a.order || 0) - (b.order || 0) || new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+    const total = list.length;
+    const paginated = list.slice((pNum - 1) * lNum, pNum * lNum);
+    const categories = Array.from(new Set(inMemoryGallery.map(p => p.category).filter(Boolean)));
+
+    res.json({
+      photos: paginated,
+      total,
+      page: pNum,
+      totalPages: Math.ceil(total / lNum) || 1,
+      categories
+    });
+  } catch (err) {
+    console.error('Error fetching admin gallery:', err);
+    res.status(500).json({ error: 'Failed to fetch admin gallery' });
+  }
+});
+
+app.get('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isMongoConnected) {
+      const photo = await GalleryItem.findById(id);
+      if (!photo) return res.status(404).json({ error: 'Photo not found' });
+      return res.json({ photo });
+    }
+    const photo = inMemoryGallery.find(p => p._id === id);
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    res.json({ photo });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch photo' });
+  }
+});
+
+// Standalone upload endpoint
+app.post('/api/admin/gallery/upload', authMiddleware, upload.single('photo'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    const fileUrl = `/uploads/gallery/${req.file.filename}`;
+    res.json({
+      success: true,
+      url: fileUrl,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    });
+  } catch (err) {
+    console.error('Error uploading gallery photo:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+});
+
+// Create new gallery photo (supports JSON body or multipart upload)
+app.post('/api/admin/gallery', authMiddleware, (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    let { title, caption, url, category, tags, location, alt, date, featured, status, order } = req.body;
+
+    if (req.file) {
+      url = `/uploads/gallery/${req.file.filename}`;
+    }
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!url || !url.trim()) {
+      return res.status(400).json({ error: 'Photo file or image URL is required' });
+    }
+
+    let parsedTags = [];
+    if (Array.isArray(tags)) {
+      parsedTags = tags.map(t => String(t).trim()).filter(Boolean);
+    } else if (typeof tags === 'string') {
+      parsedTags = tags.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean);
+    }
+
+    const photoData = {
+      title: title.trim(),
+      caption: (caption || '').trim(),
+      url: url.trim(),
+      category: (category || 'Photography').trim(),
+      tags: parsedTags,
+      location: (location || '').trim(),
+      alt: (alt || title).trim(),
+      date: date ? new Date(date) : new Date(),
+      featured: featured === true || featured === 'true' || featured === '1',
+      status: (status === 'draft') ? 'draft' : 'published',
+      order: parseInt(order) || 0
+    };
+
+    if (isMongoConnected) {
+      const created = await GalleryItem.create(photoData);
+      return res.status(201).json({ success: true, photo: created });
+    }
+
+    const newPhoto = {
+      ...photoData,
+      _id: `mem-photo-${Date.now()}`,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    inMemoryGallery.unshift(newPhoto);
+    res.status(201).json({ success: true, photo: newPhoto });
+  } catch (err) {
+    console.error('Error creating gallery photo:', err);
+    res.status(500).json({ error: 'Failed to create gallery photo' });
+  }
+});
+
+// Update gallery photo
+app.put('/api/admin/gallery/:id', authMiddleware, (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { title, caption, url, category, tags, location, alt, date, featured, status, order } = req.body;
+
+    if (req.file) {
+      url = `/uploads/gallery/${req.file.filename}`;
+    }
+
+    let parsedTags = undefined;
+    if (tags !== undefined) {
+      if (Array.isArray(tags)) {
+        parsedTags = tags.map(t => String(t).trim()).filter(Boolean);
+      } else if (typeof tags === 'string') {
+        parsedTags = tags.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean);
+      }
+    }
+
+    const updates = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (caption !== undefined) updates.caption = caption.trim();
+    if (url !== undefined) updates.url = url.trim();
+    if (category !== undefined) updates.category = category.trim();
+    if (parsedTags !== undefined) updates.tags = parsedTags;
+    if (location !== undefined) updates.location = location.trim();
+    if (alt !== undefined) updates.alt = alt.trim();
+    if (date !== undefined) updates.date = new Date(date);
+    if (featured !== undefined) updates.featured = featured === true || featured === 'true' || featured === '1';
+    if (status !== undefined) updates.status = (status === 'draft') ? 'draft' : 'published';
+    if (order !== undefined) updates.order = parseInt(order) || 0;
+    updates.updatedAt = new Date();
+
+    if (isMongoConnected) {
+      const updated = await GalleryItem.findByIdAndUpdate(id, { $set: updates }, { new: true });
+      if (!updated) return res.status(404).json({ error: 'Photo not found' });
+      return res.json({ success: true, photo: updated });
+    }
+
+    const idx = inMemoryGallery.findIndex(p => p._id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
+    inMemoryGallery[idx] = { ...inMemoryGallery[idx], ...updates };
+    res.json({ success: true, photo: inMemoryGallery[idx] });
+  } catch (err) {
+    console.error('Error updating gallery photo:', err);
+    res.status(500).json({ error: 'Failed to update gallery photo' });
+  }
+});
+
+// Delete gallery photo
+app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let photoUrl = '';
+
+    if (isMongoConnected) {
+      const photo = await GalleryItem.findById(id);
+      if (!photo) return res.status(404).json({ error: 'Photo not found' });
+      photoUrl = photo.url;
+      await GalleryItem.findByIdAndDelete(id);
+    } else {
+      const idx = inMemoryGallery.findIndex(p => p._id === id);
+      if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
+      photoUrl = inMemoryGallery[idx].url;
+      inMemoryGallery.splice(idx, 1);
+    }
+
+    // If local file in uploads/gallery, remove it cleanly
+    if (photoUrl && photoUrl.startsWith('/uploads/gallery/')) {
+      const localPath = path.join(__dirname, photoUrl);
+      if (fs.existsSync(localPath)) {
+        try { fs.unlinkSync(localPath); } catch (e) {}
+      }
+    }
+
+    res.json({ success: true, message: 'Photo deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting gallery photo:', err);
+    res.status(500).json({ error: 'Failed to delete photo' });
+  }
+});
+
+// Quick publish/unpublish toggles
+app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isMongoConnected) {
+      const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'published', updatedAt: new Date() } }, { new: true });
+      return res.json({ success: true, photo });
+    }
+    const p = inMemoryGallery.find(item => item._id === id);
+    if (!p) return res.status(404).json({ error: 'Photo not found' });
+    p.status = 'published';
+    p.updatedAt = new Date();
+    res.json({ success: true, photo: p });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to publish photo' });
+  }
+});
+
+app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isMongoConnected) {
+      const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'draft', updatedAt: new Date() } }, { new: true });
+      return res.json({ success: true, photo });
+    }
+    const p = inMemoryGallery.find(item => item._id === id);
+    if (!p) return res.status(404).json({ error: 'Photo not found' });
+    p.status = 'draft';
+    p.updatedAt = new Date();
+    res.json({ success: true, photo: p });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unpublish photo' });
+  }
+});
+
 /* --- Dynamic Sitemap and RSS Feed Generation --- */
 app.get('/sitemap.xml', async (req, res) => {
   try {
@@ -1199,6 +1751,7 @@ app.get('/sitemap.xml', async (req, res) => {
     xml += `  <url>\n    <loc>${siteUrl}/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
     xml += `  <url>\n    <loc>${siteUrl}/about.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
     xml += `  <url>\n    <loc>${siteUrl}/writing.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/gallery.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
 
     // Dynamic Posts
     posts.forEach(p => {
@@ -1227,7 +1780,7 @@ app.get('/feed.xml', async (req, res) => {
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
     xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
     xml += `  <channel>\n`;
-    xml += `    <title>Chitrons Archive</title>\n`;
+    xml += `    <title>Chitron's Archive</title>\n`;
     xml += `    <link>${siteUrl}/</link>\n`;
     xml += `    <description>Notes, ideas, experiments and things worth remembering — by Chitron Bhattacharjee.</description>\n`;
     xml += `    <language>en-US</language>\n`;

@@ -19,9 +19,19 @@
     return h;
   }
 
+  var cachedPosts = [];
+
+  function toBnDigits(str) {
+    var bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(str).replace(/[0-9]/g, function(d) { return bnDigits[+d]; });
+  }
+
   function renderPost(p) {
+    var isBn = window.i18n && window.i18n.getLang() === 'bn';
     var d = p.publishedAt ? new Date(p.publishedAt) : new Date();
-    var date = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    var date = d.toLocaleDateString(isBn ? 'bn-BD' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    var readMins = p.readingTime || 1;
+    var readText = isBn ? toBnDigits(readMins) + ' মিনিট পড়ার সময়' : readMins + ' min read';
     var coverHtml = p.coverImage ? '<img src="' + esc(p.coverImage) + '" alt="' + esc(p.title) + '" class="post-item-cover" loading="lazy">' : '';
     return '<article class="post-item">' +
       coverHtml +
@@ -30,7 +40,7 @@
         '<span class="dot" aria-hidden="true">&middot;</span>' +
         '<time datetime="' + d.toISOString() + '">' + date + '</time>' +
         '<span class="dot" aria-hidden="true">&middot;</span>' +
-        '<span>' + (p.readingTime || 1) + ' min read</span>' +
+        '<span>' + readText + '</span>' +
       '</div>' +
       '<h3><a href="./post.html?slug=' + esc(p.slug) + '">' + esc(p.title) + '</a></h3>' +
       '<p>' + esc(p.excerpt) + '</p>' +
@@ -39,6 +49,8 @@
 
   async function loadHomepage() {
     try {
+      var isBn = window.i18n && window.i18n.getLang() === 'bn';
+      if (isBn) return; // let i18n handle static text
       var data = await API.getHomepage();
       var p = data.page;
       if (!p) return;
@@ -71,10 +83,12 @@
 
     try {
       var data = await API.getPosts({ limit: 5, sort: 'newest' });
-      if (data.posts && data.posts.length > 0) {
-        container.innerHTML = data.posts.map(renderPost).join('');
+      cachedPosts = data.posts || [];
+      if (cachedPosts.length > 0) {
+        container.innerHTML = cachedPosts.map(renderPost).join('');
       } else {
-        container.innerHTML = '<div class="empty-state"><p>No articles yet.</p></div>';
+        var emptyMsg = window.i18n && window.i18n.getLang() === 'bn' ? 'কোনো নিবন্ধ নেই।' : 'No articles yet.';
+        container.innerHTML = '<div class="empty-state"><p>' + emptyMsg + '</p></div>';
       }
     } catch (e) {
       container.innerHTML = '<div class="empty-state"><p>Unable to load articles right now.</p></div>';
@@ -85,6 +99,13 @@
     loadSettings();
     loadHomepage();
     loadPosts();
+
+    window.addEventListener('ca-lang-change', function() {
+      var container = document.getElementById('latest-posts');
+      if (container && cachedPosts.length > 0) {
+        container.innerHTML = cachedPosts.map(renderPost).join('');
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

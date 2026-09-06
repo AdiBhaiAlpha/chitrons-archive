@@ -95,6 +95,25 @@ const API = (() => {
       return request('/api/content/about');
     },
 
+    async getGallery({ category, search, page, limit, sort } = {}) {
+      const p = new URLSearchParams();
+      if (category) p.set('category', category);
+      if (search) p.set('search', search);
+      if (page) p.set('page', page);
+      if (limit) p.set('limit', limit);
+      if (sort) p.set('sort', sort);
+      const q = p.toString();
+      return request('/api/gallery' + (q ? '?' + q : ''));
+    },
+
+    async getGalleryPhoto(id) {
+      return request('/api/gallery/' + encodeURIComponent(id));
+    },
+
+    async getGalleryCategories() {
+      return request('/api/gallery/categories');
+    },
+
     async login(pin) {
       const res = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ pin }) });
       if (res && res.token) {
@@ -212,6 +231,52 @@ const API = (() => {
 
     async adminSaveAbout(data) {
       return request('/api/admin/content/about', { method: 'PUT', body: JSON.stringify(data) });
+    },
+
+    /* --- Admin Gallery --- */
+    async adminGetGallery({ search, status, category, page, limit } = {}) {
+      const p = new URLSearchParams();
+      if (search) p.set('search', search);
+      if (status && status !== 'all') p.set('status', status);
+      if (category && category !== 'all') p.set('category', category);
+      if (page) p.set('page', page);
+      if (limit) p.set('limit', limit);
+      const q = p.toString();
+      return request('/api/admin/gallery' + (q ? '?' + q : ''));
+    },
+
+    async adminGetGalleryPhoto(id) {
+      return request('/api/admin/gallery/' + id);
+    },
+
+    async adminCreateGalleryPhoto(data) {
+      return request('/api/admin/gallery', { method: 'POST', body: JSON.stringify(data) });
+    },
+
+    async adminUpdateGalleryPhoto(id, data) {
+      return request('/api/admin/gallery/' + id, { method: 'PUT', body: JSON.stringify(data) });
+    },
+
+    async adminDeleteGalleryPhoto(id) {
+      return request('/api/admin/gallery/' + id, { method: 'DELETE' });
+    },
+
+    async adminPublishGalleryPhoto(id) {
+      return request('/api/admin/gallery/' + id + '/publish', { method: 'POST' });
+    },
+
+    async adminUnpublishGalleryPhoto(id) {
+      return request('/api/admin/gallery/' + id + '/unpublish', { method: 'POST' });
     }
   };
 })();
+
+if (typeof window !== 'undefined') {
+  window.API = API;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.API = API;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = API;
+}

@@ -110,14 +110,26 @@
       if (!s) return;
       if (s.siteName) document.querySelectorAll('.site-logo').forEach(function(el) { el.textContent = s.siteName; });
       var author = s.authorName || 'Chitron Bhattacharjee';
-      SeoHelper.setTitle('About ' + author + ' | ' + (s.siteName || 'Chitrons Archive'));
+      SeoHelper.setTitle('About ' + author + ' | ' + (s.siteName || "Chitron's Archive"));
       SeoHelper.setMeta('description', 'About ' + author + ' — ' + (s.authorTitle || 'AI Developer & Programmer') + '. ' + (s.location || ''));
     } catch (e) {}
   }
 
   function init() {
     loadSettings();
-    loadAbout();
+    loadAbout().then(function() {
+      if (window.i18n && window.i18n.getLang() === 'bn') {
+        window.i18n.translateDom('bn');
+      }
+    });
+
+    window.addEventListener('ca-lang-change', function(e) {
+      if (e.detail && e.detail.lang === 'bn') {
+        if (window.i18n) window.i18n.translateDom('bn');
+      } else {
+        loadAbout();
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

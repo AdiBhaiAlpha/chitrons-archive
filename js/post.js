@@ -16,27 +16,41 @@
     return params.get('slug');
   }
 
+  var cachedPost = null;
+  var cachedNav = null;
+
+  function toBnDigits(str) {
+    var bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(str).replace(/[0-9]/g, function(d) { return bnDigits[+d]; });
+  }
+
   function renderNav(data) {
+    cachedNav = data;
     const el = document.getElementById('post-nav');
-    if (!el) return;
+    if (!el || !data) return;
+    const isBn = window.i18n && window.i18n.getLang() === 'bn';
+    const prevLabel = isBn ? '&larr; পূর্ববর্তী' : '&larr; Previous';
+    const nextLabel = isBn ? 'পরবর্তী &rarr;' : 'Next &rarr;';
     let h = '';
     if (data.previous) {
-      h += '<a href="./post.html?slug=' + esc(data.previous.slug) + '"><span class="label">&larr; Previous</span>' + esc(data.previous.title) + '</a>';
+      h += '<a href="./post.html?slug=' + esc(data.previous.slug) + '"><span class="label">' + prevLabel + '</span>' + esc(data.previous.title) + '</a>';
     }
     if (data.next) {
-      h += '<a href="./post.html?slug=' + esc(data.next.slug) + '" class="next"><span class="label">Next &rarr;</span>' + esc(data.next.title) + '</a>';
+      h += '<a href="./post.html?slug=' + esc(data.next.slug) + '" class="next"><span class="label">' + nextLabel + '</span>' + esc(data.next.title) + '</a>';
     }
     el.innerHTML = h;
   }
 
   function renderPost(post) {
+    cachedPost = post;
+    var isBn = window.i18n && window.i18n.getLang() === 'bn';
     var d = post.publishedAt ? new Date(post.publishedAt) : new Date();
     if (isNaN(d.getTime())) d = new Date();
 
-    var date = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    var date = d.toLocaleDateString(isBn ? 'bn-BD' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     var updDate = post.updatedAt ? new Date(post.updatedAt) : null;
     var upd = updDate && !isNaN(updDate.getTime()) && updDate > d
-      ? updDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      ? updDate.toLocaleDateString(isBn ? 'bn-BD' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       : null;
 
     var labels = post.labels || [];
@@ -46,7 +60,8 @@
     if (dateEl) {
       dateEl.innerHTML = '<time datetime="' + d.toISOString() + '">' + date + '</time>';
       if (upd) {
-        dateEl.innerHTML += ' <span style="color:var(--text-tertiary)">(updated ' + upd + ')</span>';
+        var updLabel = isBn ? '(হালনাগাদ ' + upd + ')' : '(updated ' + upd + ')';
+        dateEl.innerHTML += ' <span style="color:var(--text-tertiary)">' + updLabel + '</span>';
       }
     }
 
@@ -60,7 +75,10 @@
     if (excerptEl) excerptEl.textContent = post.excerpt || '';
 
     var readTimeEl = document.getElementById('article-reading-time');
-    if (readTimeEl) readTimeEl.textContent = (post.readingTime || 1) + ' min read';
+    if (readTimeEl) {
+      var readMins = post.readingTime || 1;
+      readTimeEl.textContent = isBn ? toBnDigits(readMins) + ' মিনিট পড়ার সময়' : readMins + ' min read';
+    }
 
     var tagsEl = document.getElementById('article-tags');
     if (tagsEl) tagsEl.innerHTML = tagsHtml;
@@ -80,7 +98,7 @@
 
     /* SEO & Metadata */
     try {
-      var siteName = 'Chitrons Archive';
+      var siteName = "Chitron's Archive";
       var author = post.author || 'Chitron Bhattacharjee';
       var baseUrl = 'https://chitron.iam.bd';
       var pageUrl = baseUrl + '/post.html?slug=' + encodeURIComponent(post.slug);
@@ -185,4 +203,9 @@
   } else {
     load();
   }
+
+  window.addEventListener('ca-lang-change', function() {
+    if (cachedPost) renderPost(cachedPost);
+    if (cachedNav) renderNav(cachedNav);
+  });
 })();
