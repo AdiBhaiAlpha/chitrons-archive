@@ -265,6 +265,307 @@ h1, h2, h3, h4, h5, h6, p, .article-title, .hero h1, .hero p, .post-item h3 {
 .btn-sm { padding: 5px 12px; font-size: 12px; }
 
 /* =========================================================
+   DESKTOP 3-COLUMN HOMEPAGE LAYOUT
+   ========================================================= */
+.home-desktop-layout {
+  width: 100%;
+}
+
+.desktop-sidebar {
+  display: none !important;
+}
+
+.home-main-content {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .home-desktop-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr 280px;
+    gap: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 24px;
+    padding-right: 24px;
+    align-items: start;
+    padding-top: 16px;
+    padding-bottom: 40px;
+  }
+
+  .desktop-sidebar {
+    display: block !important;
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+    z-index: 10;
+  }
+
+  .home-main-content {
+    min-width: 0;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+  }
+
+  .home-main-content .container--narrow {
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Sidebar Widgets */
+.sidebar-widget {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.sidebar-widget:last-child {
+  margin-bottom: 0;
+}
+
+.widget-title {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* Profile Widget (Left Sidebar) */
+.widget-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.profile-avatar-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  background: var(--bg-tertiary);
+  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+  cursor: pointer;
+}
+
+.profile-avatar-wrap:hover {
+  transform: translateY(-2px) scale(1.05);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+.profile-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition);
+}
+
+.profile-avatar-wrap:hover .profile-avatar {
+  transform: scale(1.08);
+}
+
+.profile-name {
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+  letter-spacing: -0.01em;
+}
+
+.profile-role {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-bio {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.profile-socials {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--text-tertiary);
+}
+
+.profile-socials a {
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  transition: all var(--transition);
+}
+
+.profile-socials a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.profile-link {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color var(--transition);
+}
+
+.profile-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* Trending Widget (Right Sidebar) */
+.trending-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.trending-item {
+  display: block;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border-light);
+  text-decoration: none;
+  transition: background-color var(--transition);
+}
+
+.trending-item:first-child {
+  padding-top: 0;
+}
+
+.trending-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.trending-item-meta {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+}
+
+.trending-item-meta .category {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.trending-item-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
+  margin: 0;
+  transition: color var(--transition);
+}
+
+.trending-item:hover .trending-item-title {
+  color: var(--accent);
+}
+
+/* Categories Cloud */
+.categories-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.category-chip {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.category-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+/* RSS Widget */
+.widget-rss .rss-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.widget-rss .rss-icon {
+  color: #e67e22;
+}
+
+.widget-rss h4 {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.widget-rss p {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.loading-sm {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px 0;
+}
+
+/* =========================================================
    SECTION
    ========================================================= */
 .section {

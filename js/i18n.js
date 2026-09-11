@@ -40,6 +40,16 @@
       'home.loading': 'Loading...',
       'home.minRead': 'min read',
 
+      // Desktop Sidebar
+      'sidebar.aboutTitle': 'About Me',
+      'sidebar.aboutRole': 'AI Developer & Writer',
+      'sidebar.aboutBio': 'Building conversational AI systems, web tools, and writing on technology.',
+      'sidebar.viewProfile': 'Full Profile →',
+      'sidebar.trendingTitle': 'Trending Articles',
+      'sidebar.categoriesTitle': 'Explore Topics',
+      'sidebar.rssTitle': 'RSS & Connect',
+      'sidebar.rssDesc': 'Subscribe to RSS feed for new notes and articles.',
+
       // About Page
       'about.headline': 'Hi, I’m Chitron Bhattacharjee.',
       'about.shortBio': '<p>I’m an AI developer, programmer, and writer from Bangladesh. I enjoy building things with technology, especially AI-powered systems, web applications, and tools that solve real problems in a simple way.</p><p>I’m always interested in learning how things work behind the scenes and turning ideas into something people can actually use.</p>',
@@ -161,6 +171,16 @@
       'home.viewAll': 'সব দেখুন →',
       'home.loading': 'লোড হচ্ছে...',
       'home.minRead': 'মিনিট পড়ার সময়',
+
+      // Desktop Sidebar
+      'sidebar.aboutTitle': 'আমার সম্পর্কে',
+      'sidebar.aboutRole': 'এআই ডেভেলপার ও লেখক',
+      'sidebar.aboutBio': 'এআই সিস্টেম, ওয়েব টুলস তৈরি এবং প্রযুক্তি বিষয়ক লেখালেখি করি।',
+      'sidebar.viewProfile': 'সম্পূর্ণ প্রোফাইল →',
+      'sidebar.trendingTitle': 'জনপ্রিয় নিবন্ধ',
+      'sidebar.categoriesTitle': 'ক্যাটাগরি সমূহ',
+      'sidebar.rssTitle': 'আরএসএস ও সংযোগ',
+      'sidebar.rssDesc': 'নতুন লেখা ও নোটের জন্য আরএসএস (RSS) ফিড ফলো করুন।',
 
       // About Page
       'about.headline': 'নমস্কার, আমি চিত্রন ভট্টাচার্য।',

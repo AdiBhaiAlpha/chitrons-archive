@@ -95,16 +95,66 @@
     }
   }
 
+  function renderTrendingItem(p) {
+    var isBn = window.i18n && window.i18n.getLang() === 'bn';
+    var readMins = p.readingTime || 1;
+    var readText = isBn ? toBnDigits(readMins) + ' মিনিট' : readMins + ' min read';
+    return '<a href="./post.html?slug=' + esc(p.slug) + '" class="trending-item">' +
+      '<div class="trending-item-meta">' +
+        '<span class="category">' + esc(p.category) + '</span> &middot; ' +
+        '<span>' + readText + '</span>' +
+      '</div>' +
+      '<h4 class="trending-item-title">' + esc(p.title) + '</h4>' +
+    '</a>';
+  }
+
+  async function loadSidebars() {
+    var trendingContainer = document.getElementById('trending-posts');
+    var catContainer = document.getElementById('sidebar-categories');
+
+    if (trendingContainer) {
+      try {
+        var data = await API.getPosts({ limit: 4, sort: 'newest' });
+        var posts = data.posts || [];
+        if (posts.length > 0) {
+          trendingContainer.innerHTML = posts.map(renderTrendingItem).join('');
+        } else {
+          trendingContainer.innerHTML = '<p class="text-muted" style="font-size:12px">No trending posts yet.</p>';
+        }
+      } catch (e) {
+        trendingContainer.innerHTML = '<p class="text-muted" style="font-size:12px">Unable to load trending posts.</p>';
+      }
+    }
+
+    if (catContainer) {
+      try {
+        var res = await API.getCategories();
+        var cats = res.categories || ['AI & Tech', 'Programming', 'Personal', 'Software'];
+        if (cats.length > 0) {
+          catContainer.innerHTML = cats.slice(0, 8).map(function(c) {
+            return '<a href="./writing.html?category=' + encodeURIComponent(c) + '" class="category-chip">' + esc(c) + '</a>';
+          }).join('');
+        } else {
+          catContainer.innerHTML = '<a href="./writing.html" class="category-chip">Writing</a>';
+        }
+      } catch (e) {
+        catContainer.innerHTML = '<a href="./writing.html?category=AI" class="category-chip">AI</a><a href="./writing.html?category=Programming" class="category-chip">Programming</a>';
+      }
+    }
+  }
+
   function init() {
     loadSettings();
     loadHomepage();
     loadPosts();
+    loadSidebars();
 
     window.addEventListener('ca-lang-change', function() {
       var container = document.getElementById('latest-posts');
       if (container && cachedPosts.length > 0) {
         container.innerHTML = cachedPosts.map(renderPost).join('');
       }
+      loadSidebars();
     });
   }
 

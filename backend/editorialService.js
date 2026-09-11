@@ -58,15 +58,82 @@ function fetchBuffer(url) {
 }
 
 /* =========================================================
-   1. AUTOMATIC EXCERPT GENERATION
+   OPENROUTER AI HELPER
+   ========================================================= */
+async function callOpenRouter(messages, options = {}) {
+  const apiKey = (process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_key || '').trim();
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY is missing');
+  }
+
+  const model = options.model || 'google/gemini-2.5-flash';
+  const siteUrl = process.env.FRONTEND_URL || 'https://chitron.iam.bd/';
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': siteUrl,
+      'X-Title': 'Chitrons Archive Editorial'
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: options.temperature ?? 0.5,
+      max_tokens: options.maxTokens ?? 300
+    })
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.error?.message || `OpenRouter API error HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  return text.trim();
+}
+
+/* =========================================================
+   1. AUTOMATIC EXCERPT GENERATION (OpenRouter SEO Priority)
    ========================================================= */
 async function generateExcerpt(title, content, options = {}) {
   const rawText = stripHtml(content);
   if (!rawText) return title || 'No content summary available.';
 
+  const category = options.category || '';
   const lang = detectLanguage(title + ' ' + rawText);
 
-  // Try Gemini AI if key exists
+  // 1. Primary: Try OpenRouter AI Model for SEO-friendly, contextual excerpt
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_key || '').trim();
+  if (openRouterKey) {
+    try {
+      const systemPrompt = lang === 'bn'
+        ? 'আপনি একজন পেশাদার এসইও সম্পাদক এবং কন্টেন্ট বিশেষজ্ঞ। আপনার কাজ নিবন্ধের মূল ভাব বজায় রেখে সার্চ ইঞ্জিনের জন্য উপযুক্ত, অত্যন্ত বিষয়ভিত্তিক ও আকর্ষণীয় সারসংক্ষেপ তৈরি করা।'
+        : 'You are an expert SEO editorial strategist. Your goal is to write a highly compelling, contextual, and SEO-friendly article excerpt/meta description.';
+
+      const userPrompt = lang === 'bn'
+        ? `নিচের নিবন্ধটির জন্য ১-২ বাক্যে (সর্বোচ্চ ২২-২৪০ অক্ষর) একটি আকর্ষণীয়, প্রাসঙ্গিক ও এসইও-বান্ধব সারসংক্ষেপ (excerpt/meta description) লিখুন। সারসংক্ষেপটি নিবন্ধের মূল বক্তব্য প্রকাশ করবে ও পাঠকের কৌতুহল জাগাবে। কোনো উদ্ধৃতি চিহ্ন, মার্কডাউন বা অতিরিক্ত ব্যাখ্যা ছাড়াই শুধুমাত্র তৈরি করা সারসংক্ষেপটি প্রদান করুন:\n\nশিরোনাম: ${title}\nক্যাটাগরি: ${category}\nলেখা: ${rawText.slice(0, 2500)}`
+        : `Write a compelling, contextual, and SEO-optimized 1-2 sentence excerpt (meta description, max 220 characters) for the following article. Incorporate relevant context naturally, hook the reader, and summarize the key argument. Output ONLY the clean excerpt text without quotes, labels, or extra comments:\n\nTitle: ${title}\nCategory: ${category}\nContent: ${rawText.slice(0, 2500)}`;
+
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ];
+
+      const aiExcerpt = await callOpenRouter(messages, { temperature: 0.4, maxTokens: 250 });
+      const cleanExcerpt = aiExcerpt.replace(/^["']|["']$/g, '').trim();
+
+      if (cleanExcerpt && cleanExcerpt.length >= 20) {
+        return cleanExcerpt;
+      }
+    } catch (err) {
+      console.warn('[EditorialService] OpenRouter excerpt generation fallback:', err.message);
+    }
+  }
+
+  // 2. Secondary: Fallback to Gemini AI if configured
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (apiKey && GoogleGenAI) {
     try {
@@ -89,7 +156,7 @@ async function generateExcerpt(title, content, options = {}) {
     }
   }
 
-  // Pure Algorithmic Fallback (Bengali & English sentence boundaries)
+  // 3. Tertiary: Algorithmic Sentence Extraction Fallback
   const sentenceDelimiter = (lang === 'bn') ? /[।!?\n]+/ : /[.!?\n]+/;
   const sentences = rawText
     .split(sentenceDelimiter)
@@ -116,6 +183,33 @@ async function generateExcerpt(title, content, options = {}) {
 async function generateTags(title, excerpt, content, category, options = {}) {
   const combinedText = `${title} ${excerpt || ''} ${stripHtml(content).slice(0, 1500)}`;
   const lang = detectLanguage(combinedText);
+
+  // Try OpenRouter AI
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_key || '').trim();
+  if (openRouterKey) {
+    try {
+      const userPrompt = lang === 'bn'
+        ? `নিচের লেখাটির জন্য ৩ থেকে ৬টি প্রাসঙ্গিক ট্যাগ/লেবেল কমা দিয়ে পৃথক করে লিখুন (যেমন: মধ্যবিত্ত, অর্থনীতি, প্রযুক্তি, সমাজ)। শুধুমাত্র ট্যাগগুলো লিখুন:\n\nশিরোনাম: ${title}\nক্যাটাগরি: ${category || ''}\nলেখা: ${combinedText.slice(0, 1500)}`
+        : `Generate 3 to 6 relevant short tags/labels separated by commas for this article. Output ONLY comma-separated tags:\n\nTitle: ${title}\nCategory: ${category || ''}\nContent: ${combinedText.slice(0, 1500)}`;
+
+      const aiTags = await callOpenRouter([
+        { role: 'system', content: 'You are an editorial taxonomy assistant. Output ONLY comma-separated tags.' },
+        { role: 'user', content: userPrompt }
+      ], { temperature: 0.3, maxTokens: 100 });
+
+      if (aiTags) {
+        const parsed = aiTags
+          .split(/[,;\n]+/)
+          .map(t => t.replace(/^[#\-\s]+/, '').trim().toLowerCase())
+          .filter(t => t.length > 1 && t.length < 30);
+        if (parsed.length >= 2) {
+          return [...new Set(parsed)].slice(0, 7);
+        }
+      }
+    } catch (err) {
+      console.warn('[EditorialService] OpenRouter tag generation fallback:', err.message);
+    }
+  }
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (apiKey && GoogleGenAI) {
@@ -171,10 +265,30 @@ async function generateTags(title, excerpt, content, category, options = {}) {
 }
 
 /* =========================================================
-   3. ARTICLE TOPIC UNDERSTANDING & SEARCH KEYWORDS
+   3. ARTICLE TOPIC UNDERSTANDING & SEARCH KEYWORDS (OpenRouter + Concept Map)
    ========================================================= */
-function extractSearchKeywords(title, content, category) {
-  const combined = `${title} ${category || ''} ${stripHtml(content).slice(0, 1000)}`;
+async function extractSearchKeywords(title, content, category) {
+  const combined = `${title} ${category || ''} ${stripHtml(content).slice(0, 1500)}`;
+
+  // Step 1: Try OpenRouter AI for Context-Reading Image Search Terms
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_key || '').trim();
+  if (openRouterKey) {
+    try {
+      const userPrompt = `Analyze the topic, tone, and visual context of this article (whether written in Bengali or English). Generate 2 to 4 clean, concrete, English stock photo search terms for Pixabay. Focus on physical objects, atmospheric scenes, or subjects suitable for editorial hero photos (e.g. 'vintage writing notebook coffee desk', 'city skyline urban street lights', 'working class factory labor', 'computer code developer workspace'). Output ONLY 3 to 6 English keywords separated by spaces without punctuation or commentary:\n\nTitle: ${title}\nCategory: ${category || ''}\nContent: ${stripHtml(content).slice(0, 1000)}`;
+
+      const aiKeywords = await callOpenRouter([
+        { role: 'system', content: 'You are a stock photo editor. Output ONLY English space-separated search terms.' },
+        { role: 'user', content: userPrompt }
+      ], { temperature: 0.3, maxTokens: 60 });
+
+      const cleanAiKeywords = aiKeywords.replace(/[^\w\s]/g, '').trim().toLowerCase();
+      if (cleanAiKeywords && cleanAiKeywords.length >= 4) {
+        return cleanAiKeywords.slice(0, 80);
+      }
+    } catch (err) {
+      console.warn('[EditorialService] OpenRouter image keyword suggestion fallback:', err.message);
+    }
+  }
 
   // Translation mapping for common Bengali political/economic/social terms to concrete stock keywords
   const conceptMap = [
@@ -198,85 +312,76 @@ function extractSearchKeywords(title, content, category) {
     return matchedKeywords.join(' ').slice(0, 80);
   }
 
-  // Default clean English visual keywords derived from English words or standard fallback
   const cleanEng = title.replace(/[^\w\s]/g, '').trim().split(/\s+/).filter(w => w.length > 3).join(' ');
   return cleanEng || 'editorial writing coffee workspace';
 }
 
 /* =========================================================
-   4. AUTOMATIC STOCK IMAGE SEARCH (Pixabay + Pexels)
+   4. AUTOMATIC STOCK IMAGE SEARCH (Pixabay API + AI Context)
    ========================================================= */
-async function searchStockImage(searchQuery) {
-  const query = encodeURIComponent(searchQuery || 'writing desk workspace');
+async function searchStockImage(searchQuery, category = '') {
+  // Ensure we have clean query string
+  const primaryQuery = (searchQuery || 'writing desk workspace').trim();
+  const pixabayKey = (process.env.PIXABAY_API_KEY || '').trim();
 
-  // Provider 1: Pixabay
-  const pixabayKey = process.env.PIXABAY_API_KEY || '23805988-518d6a782a201c13745ef2021'; // Public developer key fallback
-  try {
-    const pUrl = `https://pixabay.com/api/?key=${pixabayKey}&q=${query}&image_type=photo&orientation=horizontal&min_width=1280&per_page=10&safesearch=true`;
-    const res = await fetchBuffer(pUrl);
-    const data = JSON.parse(res.toString('utf-8'));
-
-    if (data && data.hits && data.hits.length > 0) {
-      // Score candidates: prefer landscape (webformatWidth > webformatHeight), high views/likes
-      const candidates = data.hits.map(img => {
-        const ratio = (img.imageWidth && img.imageHeight) ? img.imageWidth / img.imageHeight : 1.5;
-        const isLandscape = ratio >= 1.2;
-        const score = (isLandscape ? 100 : 0) + (img.likes || 0) + Math.min(50, (img.views || 0) / 100);
-        return {
-          score,
-          url: img.largeImageURL || img.webformatURL,
-          provider: 'pixabay',
-          providerImageId: String(img.id),
-          sourceUrl: img.pageURL,
-          photographer: img.user || 'Pixabay Contributor',
-          photographerUrl: `https://pixabay.com/users/${img.user}-${img.user_id}/`,
-          searchQuery
-        };
-      });
-
-      candidates.sort((a, b) => b.score - a.score);
-      if (candidates[0]) {
-        return candidates[0];
-      }
-    }
-  } catch (err) {
-    console.warn('[EditorialService] Pixabay search failed:', err.message);
-  }
-
-  // Provider 2: Pexels Fallback
-  const pexelsKey = process.env.PEXELS_API_KEY;
-  if (pexelsKey) {
+  // Helper to query Pixabay and score results
+  async function queryPixabay(q) {
+    if (!pixabayKey) return null;
+    const pUrl = `https://pixabay.com/api/?key=${encodeURIComponent(pixabayKey)}&q=${encodeURIComponent(q)}&image_type=photo&orientation=horizontal&min_width=1280&per_page=12&safesearch=true`;
+    
     try {
-      const pexUrl = `https://api.pexels.com/v1/search?query=${query}&orientation=landscape&per_page=10`;
-      const res = await new Promise((resolve, reject) => {
-        const req = https.get(pexUrl, {
-          headers: { 'Authorization': pexelsKey, 'User-Agent': 'ChitronsArchive/1.0' }
-        }, (res) => {
-          let body = '';
-          res.on('data', chunk => body += chunk);
-          res.on('end', () => resolve(JSON.parse(body)));
-        });
-        req.on('error', reject);
-      });
+      const res = await fetchBuffer(pUrl);
+      const data = JSON.parse(res.toString('utf-8'));
 
-      if (res && res.photos && res.photos.length > 0) {
-        const photo = res.photos[0];
-        return {
-          url: photo.src.large2x || photo.src.large || photo.src.original,
-          provider: 'pexels',
-          providerImageId: String(photo.id),
-          sourceUrl: photo.url,
-          photographer: photo.photographer,
-          photographerUrl: photo.photographer_url,
-          searchQuery
-        };
+      if (data && data.hits && data.hits.length > 0) {
+        // Score candidates based on aspect ratio, resolution, and community popularity
+        const candidates = data.hits.map(img => {
+          const ratio = (img.imageWidth && img.imageHeight) ? img.imageWidth / img.imageHeight : 1.5;
+          const isLandscape = ratio >= 1.25 && ratio <= 2.2;
+          const score = (isLandscape ? 120 : 0) + (img.likes || 0) + Math.min(60, (img.views || 0) / 100);
+          return {
+            score,
+            url: img.largeImageURL || img.webformatURL,
+            provider: 'pixabay',
+            providerImageId: String(img.id),
+            sourceUrl: img.pageURL,
+            photographer: img.user || 'Pixabay Contributor',
+            photographerUrl: img.user_id ? `https://pixabay.com/users/${img.user}-${img.user_id}/` : 'https://pixabay.com',
+            searchQuery: q
+          };
+        });
+
+        candidates.sort((a, b) => b.score - a.score);
+        return candidates[0] || null;
       }
     } catch (err) {
-      console.warn('[EditorialService] Pexels search failed:', err.message);
+      console.warn(`[EditorialService] Pixabay search for "${q}" failed:`, err.message);
     }
+    return null;
   }
 
-  // Final fallback curated editorial stock photos if search APIs have no match
+  // Attempt 1: Search using AI contextual query
+  let result = await queryPixabay(primaryQuery);
+  if (result) return result;
+
+  // Attempt 2: Simplified keywords search on Pixabay
+  const simplified = primaryQuery.split(/\s+/).slice(0, 2).join(' ');
+  if (simplified && simplified !== primaryQuery) {
+    result = await queryPixabay(simplified);
+    if (result) return result;
+  }
+
+  // Attempt 3: Category fallback on Pixabay
+  if (category && category.trim()) {
+    result = await queryPixabay(category.trim());
+    if (result) return result;
+  }
+
+  // Attempt 4: General editorial fallback search on Pixabay
+  result = await queryPixabay('workspace writing');
+  if (result) return result;
+
+  // Final fallback curated photos
   const fallbackCollection = [
     {
       url: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80',
@@ -285,7 +390,7 @@ async function searchStockImage(searchQuery) {
       sourceUrl: 'https://unsplash.com/photos/writing-desk',
       photographer: 'Unsplash Community',
       photographerUrl: 'https://unsplash.com',
-      searchQuery
+      searchQuery: primaryQuery
     },
     {
       url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
@@ -294,7 +399,7 @@ async function searchStockImage(searchQuery) {
       sourceUrl: 'https://unsplash.com',
       photographer: 'Unsplash Community',
       photographerUrl: 'https://unsplash.com',
-      searchQuery
+      searchQuery: primaryQuery
     }
   ];
 
@@ -439,7 +544,7 @@ async function enrichPostData(postData, automationSettings = {}) {
   if (!result.excerpt || result.excerpt.trim() === '') {
     if (autoExcerpt) {
       try {
-        result.excerpt = await generateExcerpt(result.title, result.content);
+        result.excerpt = await generateExcerpt(result.title, result.content, { category: result.category });
         result.editorialAutomation.excerpt = {
           source: 'generated',
           generatedAt: new Date()
@@ -479,8 +584,8 @@ async function enrichPostData(postData, automationSettings = {}) {
   if (!result.coverImage || result.coverImage.trim() === '') {
     if (autoImage) {
       try {
-        const searchQuery = extractSearchKeywords(result.title, result.content, result.category);
-        const stockPhoto = await searchStockImage(searchQuery);
+        const searchQuery = await extractSearchKeywords(result.title, result.content, result.category);
+        const stockPhoto = await searchStockImage(searchQuery, result.category);
 
         if (stockPhoto) {
           const featuredImgUrl = await createFeaturedImage(stockPhoto, result.title, result.author || 'Chitron Bhattacharjee', result.slug || 'post');

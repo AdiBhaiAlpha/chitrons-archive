@@ -123,24 +123,88 @@
   </div>
 
   <main>
-    <section class="hero container container--narrow">
-      <h1 id="hero-title" data-i18n="home.heroTitle">Chitron Bhattacharjee</h1>
-      <p id="hero-description" data-i18n="home.heroDesc">AI developer, programmer, designer and writer from Bangladesh. This is my personal archive — notes, ideas, experiments and things worth remembering.</p>
-      <div class="hero-actions">
-        <a href="./writing.html" class="btn btn-primary" id="cta-primary" data-i18n="home.ctaPrimary">Read Writing</a>
-        <a href="./about.html" class="btn btn-secondary" id="cta-secondary" data-i18n="home.ctaSecondary">About Me</a>
-      </div>
-    </section>
+    <div class="home-desktop-layout">
+      <!-- Left Desktop Sidebar: About Component -->
+      <aside class="desktop-sidebar desktop-sidebar-left" aria-label="About Author">
+        <div class="sidebar-widget widget-profile">
+          <div class="profile-avatar-wrap">
+            <img src="https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png" alt="Chitron Bhattacharjee" class="profile-avatar" loading="lazy">
+          </div>
+          <h3 class="profile-name" data-i18n="sidebar.aboutTitle">About Me</h3>
+          <p class="profile-role" data-i18n="sidebar.aboutRole">AI Developer &amp; Writer</p>
+          <p class="profile-bio" data-i18n="sidebar.aboutBio">Building conversational AI systems, web tools, and writing on technology.</p>
 
-    <section class="section container container--narrow">
-      <div class="section-header">
-        <h2 id="section-title" data-i18n="home.latestWriting">Latest Writing</h2>
-        <a href="./writing.html" data-i18n="home.viewAll">View all &rarr;</a>
+          <div class="profile-tags">
+            <span class="tag">#AI</span>
+            <span class="tag">#NodeJS</span>
+            <span class="tag">#WebDev</span>
+            <span class="tag">#Writing</span>
+          </div>
+
+          <div class="profile-socials">
+            <a href="https://github.com/AdiBhaiAlpha" target="_blank" rel="noopener" aria-label="GitHub" title="GitHub">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+            </a>
+            <a href="https://facebook.com/ssfadi" target="_blank" rel="noopener" aria-label="Facebook" title="Facebook">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+            </a>
+            <a href="https://instagram.com/im.chitron" target="_blank" rel="noopener" aria-label="Instagram" title="Instagram">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+            </a>
+          </div>
+
+          <a href="./about.html" class="profile-link" data-i18n="sidebar.viewProfile">Full Profile &rarr;</a>
+        </div>
+      </aside>
+
+      <!-- Center Main Section Content -->
+      <div class="home-main-content">
+        <section class="hero container container--narrow">
+          <h1 id="hero-title" data-i18n="home.heroTitle">Chitron Bhattacharjee</h1>
+          <p id="hero-description" data-i18n="home.heroDesc">AI developer, programmer, designer and writer from Bangladesh. This is my personal archive — notes, ideas, experiments and things worth remembering.</p>
+          <div class="hero-actions">
+            <a href="./writing.html" class="btn btn-primary" id="cta-primary" data-i18n="home.ctaPrimary">Read Writing</a>
+            <a href="./about.html" class="btn btn-secondary" id="cta-secondary" data-i18n="home.ctaSecondary">About Me</a>
+          </div>
+        </section>
+
+        <section class="section container container--narrow">
+          <div class="section-header">
+            <h2 id="section-title" data-i18n="home.latestWriting">Latest Writing</h2>
+            <a href="./writing.html" data-i18n="home.viewAll">View all &rarr;</a>
+          </div>
+          <div id="latest-posts" class="post-list">
+            <div class="loading" data-i18n="home.loading">Loading...</div>
+          </div>
+        </section>
       </div>
-      <div id="latest-posts" class="post-list">
-        <div class="loading" data-i18n="home.loading">Loading...</div>
-      </div>
-    </section>
+
+      <!-- Right Desktop Sidebar: Trending Articles & Categories -->
+      <aside class="desktop-sidebar desktop-sidebar-right" aria-label="Trending and Categories">
+        <div class="sidebar-widget">
+          <h3 class="widget-title" data-i18n="sidebar.trendingTitle">Trending Articles</h3>
+          <div id="trending-posts" class="trending-list">
+            <div class="loading-sm" data-i18n="home.loading">Loading...</div>
+          </div>
+        </div>
+
+        <div class="sidebar-widget">
+          <h3 class="widget-title" data-i18n="sidebar.categoriesTitle">Explore Topics</h3>
+          <div id="sidebar-categories" class="categories-cloud">
+            <div class="loading-sm" data-i18n="home.loading">Loading...</div>
+          </div>
+        </div>
+
+        <div class="sidebar-widget widget-rss">
+          <div class="rss-header">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="rss-icon"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>
+            <h4 data-i18n="sidebar.rssTitle">RSS &amp; Connect</h4>
+          </div>
+          <p data-i18n="sidebar.rssDesc">Subscribe to RSS feed for new notes and articles.</p>
+          <a href="./feed.xml" class="btn btn-secondary btn-sm" target="_blank" style="margin-top:8px;width:100%;justify-content:center;">RSS Feed</a>
+        </div>
+      </aside>
+    </div>
   </main>
 
   <footer class="site-footer">

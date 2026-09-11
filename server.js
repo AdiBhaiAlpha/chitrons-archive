@@ -1060,8 +1060,8 @@ app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) =
       const generated = await editorialService.generateTags(title, excerpt, content, category);
       return res.json({ value: generated, source: 'generated' });
     } else if (field === 'featuredImage') {
-      const query = editorialService.extractSearchKeywords(title, content, category);
-      const stock = await editorialService.searchStockImage(query);
+      const query = await editorialService.extractSearchKeywords(title, content, category);
+      const stock = await editorialService.searchStockImage(query, category);
       if (stock) {
         const imgUrl = await editorialService.createFeaturedImage(stock, title, 'Chitron Bhattacharjee', generateSlug(title));
         return res.json({
