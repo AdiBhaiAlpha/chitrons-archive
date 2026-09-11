@@ -334,9 +334,14 @@ let inMemorySettings = { ...initialSettings };
 
 let isMongoConnected = false;
 let sessionStore = null;
+let mongoConnectPromise = null;
 
-function isDbConnected() {
-  return mongoose.connection.readyState === 1;
+async function isDbConnected() {
+  if (mongoose.connection.readyState === 1) {
+    return true;
+  }
+  if (!MONGODB_URI) return false;
+  return await connectToMongo();
 }
 
 // Track connection status dynamically
@@ -361,15 +366,23 @@ async function connectToMongo() {
     return true;
   }
   if (!MONGODB_URI) return false;
+
+  if (mongoose.connection.readyState === 2 && mongoConnectPromise) {
+    await mongoConnectPromise.catch(() => {});
+    return mongoose.connection.readyState === 1;
+  }
+
   try {
     mongoose.set('bufferCommands', true);
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 8000
+    mongoConnectPromise = mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000
     });
+    await mongoConnectPromise;
     isMongoConnected = true;
     return true;
   } catch (err) {
     isMongoConnected = false;
+    mongoConnectPromise = null;
     console.warn('MongoDB connection attempt failed:', err.message);
     return false;
   }
@@ -412,6 +425,16 @@ async function initMongoDB() {
         for (const g of initialGallery) {
           await GalleryItem.create(g);
         }
+      }
+
+      // Sync in-memory caches from database
+      const dbPosts = await BlogPost.find().sort({ createdAt: -1 });
+      if (dbPosts.length > 0) {
+        inMemoryPosts = dbPosts.map(p => p.toObject());
+      }
+      const dbGallery = await GalleryItem.find().sort({ order: 1, date: -1 });
+      if (dbGallery.length > 0) {
+        inMemoryGallery = dbGallery.map(g => g.toObject());
       }
     } catch (seedErr) {
       console.error('Error during MongoDB seed check:', seedErr.message);
@@ -550,7 +573,7 @@ app.get('/api/posts', async (req, res) => {
     const { search, category, tag, sort = 'newest', page = 1, limit = 10 } = req.query;
     const now = new Date();
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const conditions = [
         {
           $or: [
@@ -641,7 +664,7 @@ app.get('/api/posts', async (req, res) => {
 
 app.get('/api/posts/categories', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const categories = await BlogPost.distinct('category', { status: 'published' });
       return res.json({ categories: categories.filter(Boolean) });
     }
@@ -654,7 +677,7 @@ app.get('/api/posts/categories', async (req, res) => {
 
 app.get('/api/posts/labels', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const pipeline = [
         { $match: { status: 'published' } },
         { $unwind: '$labels' },
@@ -686,7 +709,7 @@ app.get('/api/posts/nav/:currentSlug', async (req, res) => {
       ]
     };
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const current = await BlogPost.findOne({ slug: currentSlug, ...pubCondition });
       if (!current) return res.status(404).json({ error: 'Post not found' });
       const refDate = current.publishedAt || current.createdAt || now;
@@ -715,7 +738,7 @@ app.get('/api/posts/:slug', async (req, res) => {
     const slugParam = req.params.slug;
     const now = new Date();
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findOne({
         slug: slugParam,
         $or: [
@@ -743,7 +766,7 @@ app.get('/api/posts/:slug', async (req, res) => {
 /* --- Public Content --- */
 app.get('/api/content/settings', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let settings = await SiteSettings.findOne();
       if (!settings) settings = await SiteSettings.create(initialSettings);
       return res.json({ settings });
@@ -756,7 +779,7 @@ app.get('/api/content/settings', async (req, res) => {
 
 app.get('/api/content/homepage', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let page = await Homepage.findOne();
       if (!page) page = await Homepage.create(initialHomepage);
       return res.json({ page });
@@ -769,7 +792,7 @@ app.get('/api/content/homepage', async (req, res) => {
 
 app.get('/api/content/about', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let profile = await AboutProfile.findOne();
       if (!profile || !profile.biography) {
         profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
@@ -793,7 +816,7 @@ app.get('/api/gallery', async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 24);
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const query = { status: 'published' };
       if (category && category.toLowerCase() !== 'all') {
         query.category = new RegExp('^' + category.trim() + '$', 'i');
@@ -885,7 +908,7 @@ app.get('/api/gallery', async (req, res) => {
 
 app.get('/api/gallery/categories', async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const raw = await GalleryItem.aggregate([
         { $match: { status: 'published' } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
@@ -907,7 +930,7 @@ app.get('/api/gallery/categories', async (req, res) => {
 app.get('/api/gallery/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       return res.json({ photo });
@@ -924,7 +947,7 @@ app.get('/api/gallery/:id', async (req, res) => {
 app.get('/api/admin/stats', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const [total, published, drafts, scheduled, totalPhotos] = await Promise.all([
         BlogPost.countDocuments({ status: { $ne: 'trashed' } }),
         BlogPost.countDocuments({ status: 'published' }),
@@ -951,7 +974,7 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 20);
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const query = {};
       if (status && status !== '') query.status = status;
       else query.status = { $ne: 'trashed' };
@@ -1004,7 +1027,7 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       return res.json({ post });
@@ -1142,7 +1165,7 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
       finalPublishedAt = now;
     }
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       // Check duplicate slug
       const existing = await BlogPost.findOne({ slug: postSlug });
       if (existing) {
@@ -1230,7 +1253,7 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
     const now = new Date();
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
 
@@ -1421,7 +1444,7 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'trashed';
@@ -1442,7 +1465,7 @@ app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'published';
@@ -1468,7 +1491,7 @@ app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'draft';
@@ -1489,7 +1512,7 @@ app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'draft';
@@ -1510,7 +1533,7 @@ app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       await BlogPost.findByIdAndDelete(req.params.id);
       await Revision.deleteMany({ postId: req.params.id }).catch(() => {});
       inMemoryPosts = inMemoryPosts.filter(p => String(p._id) !== String(req.params.id));
@@ -1528,7 +1551,7 @@ app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) =>
 
 app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const original = await BlogPost.findById(req.params.id);
       if (!original) return res.status(404).json({ error: 'Post not found' });
       const dup = new BlogPost({
@@ -1572,7 +1595,7 @@ app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
 /* --- Revisions --- */
 app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const revisions = await Revision.find({ postId: req.params.postId }).sort({ savedAt: -1 }).limit(20);
       return res.json({ revisions });
     }
@@ -1585,7 +1608,7 @@ app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const revision = await Revision.findById(req.params.revisionId);
       if (!revision) return res.status(404).json({ error: 'Revision not found' });
       const post = await BlogPost.findById(revision.postId);
@@ -1620,7 +1643,7 @@ app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req,
 /* --- Admin Labels & Categories --- */
 app.get('/api/admin/labels', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const pipeline = [
         { $unwind: '$labels' },
         { $group: { _id: '$labels', count: { $sum: 1 } } },
@@ -1642,7 +1665,7 @@ app.get('/api/admin/labels', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/categories', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const categories = await BlogPost.distinct('category');
       return res.json({ categories: categories.filter(Boolean) });
     }
@@ -1656,7 +1679,7 @@ app.get('/api/admin/categories', authMiddleware, async (req, res) => {
 /* --- Admin Content Update Endpoints --- */
 app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let settings = await SiteSettings.findOne();
       if (!settings) settings = await SiteSettings.create(initialSettings);
       return res.json({ settings });
@@ -1670,7 +1693,7 @@ app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
     inMemorySettings = { ...inMemorySettings, ...req.body };
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const settings = await SiteSettings.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
       return res.json({ settings });
     }
@@ -1683,7 +1706,7 @@ app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let page = await Homepage.findOne();
       if (!page) page = await Homepage.create(initialHomepage);
       return res.json({ page });
@@ -1697,7 +1720,7 @@ app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
     inMemoryHomepage = { ...inMemoryHomepage, ...req.body };
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const page = await Homepage.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
       return res.json({ page });
     }
@@ -1710,7 +1733,7 @@ app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       let profile = await AboutProfile.findOne();
       if (!profile || !profile.biography) {
         profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
@@ -1726,7 +1749,7 @@ app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
     inMemoryAbout = { ...inMemoryAbout, ...req.body };
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const profile = await AboutProfile.findOneAndUpdate(
         {},
         { $set: req.body },
@@ -1748,7 +1771,7 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 50);
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const query = {};
       if (status && status !== 'all') query.status = status;
       if (category && category !== 'all') query.category = new RegExp('^' + category.trim() + '$', 'i');
@@ -1816,7 +1839,7 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
 app.get('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       return res.json({ photo });
@@ -1891,7 +1914,7 @@ app.post('/api/admin/gallery', authMiddleware, (req, res, next) => {
       order: parseInt(order) || 0
     };
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const created = await GalleryItem.create(photoData);
       inMemoryGallery.unshift(created.toObject());
       return res.status(201).json({ success: true, photo: created });
@@ -1949,7 +1972,7 @@ app.put('/api/admin/gallery/:id', authMiddleware, (req, res, next) => {
     if (order !== undefined) updates.order = parseInt(order) || 0;
     updates.updatedAt = new Date();
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const updated = await GalleryItem.findByIdAndUpdate(id, { $set: updates }, { new: true });
       if (!updated) return res.status(404).json({ error: 'Photo not found' });
       const idx = inMemoryGallery.findIndex(p => String(p._id) === String(id));
@@ -1973,7 +1996,7 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     let photoUrl = '';
 
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       photoUrl = photo.url;
@@ -2005,7 +2028,7 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'published', updatedAt: new Date() } }, { new: true });
       const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
       if (inMem) inMem.status = 'published';
@@ -2024,7 +2047,7 @@ app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'draft', updatedAt: new Date() } }, { new: true });
       const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
       if (inMem) inMem.status = 'draft';
@@ -2045,7 +2068,7 @@ app.get('/sitemap.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 }).select('slug publishedAt updatedAt');
     } else {
       posts = inMemoryPosts.filter(p => p.status === 'published');
@@ -2082,7 +2105,7 @@ app.get('/feed.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
-    if (isDbConnected()) {
+    if (await isDbConnected()) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 });
     } else {
       posts = inMemoryPosts.filter(p => p.status === 'published');
