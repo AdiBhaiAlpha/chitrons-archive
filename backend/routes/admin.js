@@ -267,18 +267,6 @@ router.put('/posts/:id', async (req, res) => {
     res.status(500).json({ error: err.message || 'Failed to update post' });
   }
 });
-    }
-
-    if (scheduledAt && post.status === 'scheduled') {
-      post.scheduledAt = new Date(scheduledAt);
-    }
-
-    await post.save();
-    res.json({ post });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update post' });
-  }
-});
 
 /* --- Delete (trash) --- */
 router.delete('/posts/:id', async (req, res) => {

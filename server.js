@@ -335,6 +335,10 @@ let inMemorySettings = { ...initialSettings };
 let isMongoConnected = false;
 let sessionStore = null;
 
+function isDbConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
 // Track connection status dynamically
 mongoose.connection.on('connected', () => {
   isMongoConnected = true;
@@ -347,63 +351,81 @@ mongoose.connection.on('disconnected', () => {
 });
 
 mongoose.connection.on('error', (err) => {
+  isMongoConnected = false;
   console.warn('MongoDB connection event error:', err.message);
 });
 
-async function initMongoDB() {
-  if (!MONGODB_URI) return;
+async function connectToMongo() {
+  if (mongoose.connection.readyState === 1) {
+    isMongoConnected = true;
+    return true;
+  }
+  if (!MONGODB_URI) return false;
   try {
-    mongoose.set('bufferCommands', false);
+    mongoose.set('bufferCommands', true);
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 8000
     });
     isMongoConnected = true;
-    console.log('MongoDB initialized successfully');
-
-    // Auto-seed if database is empty or missing details
-    const postCount = await BlogPost.countDocuments();
-    if (postCount === 0) {
-      console.log('Seeding initial blog posts to MongoDB...');
-      for (const p of initialPosts) {
-        await BlogPost.create(p);
-      }
-    }
-
-    console.log('Syncing About profile to MongoDB...');
-    await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true, setDefaultsOnInsert: true });
-
-    const existingHp = await Homepage.findOne();
-    if (!existingHp) {
-      await Homepage.create(initialHomepage);
-    }
-
-    const existingSettings = await SiteSettings.findOne();
-    if (!existingSettings) {
-      await SiteSettings.create(initialSettings);
-    }
-
-    const galleryCount = await GalleryItem.countDocuments();
-    if (galleryCount === 0) {
-      console.log('Seeding initial gallery photos to MongoDB...');
-      for (const g of initialGallery) {
-        await GalleryItem.create(g);
-      }
-    }
+    return true;
   } catch (err) {
-    console.warn('MongoDB connection error, falling back to in-memory store:', err.message);
     isMongoConnected = false;
+    console.warn('MongoDB connection attempt failed:', err.message);
+    return false;
+  }
+}
+
+async function initMongoDB() {
+  if (!MONGODB_URI) return;
+  const connected = await connectToMongo();
+  if (connected) {
+    console.log('MongoDB initialized successfully');
+    try {
+      // Auto-seed if database is empty or missing details
+      const postCount = await BlogPost.countDocuments();
+      if (postCount === 0) {
+        console.log('Seeding initial blog posts to MongoDB...');
+        for (const p of initialPosts) {
+          await BlogPost.create(p);
+        }
+      }
+
+      const existingAbout = await AboutProfile.findOne();
+      if (!existingAbout) {
+        console.log('Seeding initial About profile to MongoDB...');
+        await AboutProfile.create(initialAbout);
+      }
+
+      const existingHp = await Homepage.findOne();
+      if (!existingHp) {
+        await Homepage.create(initialHomepage);
+      }
+
+      const existingSettings = await SiteSettings.findOne();
+      if (!existingSettings) {
+        await SiteSettings.create(initialSettings);
+      }
+
+      const galleryCount = await GalleryItem.countDocuments();
+      if (galleryCount === 0) {
+        console.log('Seeding initial gallery photos to MongoDB...');
+        for (const g of initialGallery) {
+          await GalleryItem.create(g);
+        }
+      }
+    } catch (seedErr) {
+      console.error('Error during MongoDB seed check:', seedErr.message);
+    }
   }
 }
 
 // Start DB connection
 const dbPromise = initMongoDB();
 
-// Middleware: wait for DB initialization if pending
+// Middleware: ensure MongoDB connection is active for every request
 app.use(async (req, res, next) => {
-  if (dbPromise && mongoose.connection.readyState === 0 && MONGODB_URI) {
-    try {
-      await dbPromise;
-    } catch (e) {}
+  if (MONGODB_URI && mongoose.connection.readyState !== 1) {
+    await connectToMongo().catch(() => {});
   }
   next();
 });
@@ -528,24 +550,39 @@ app.get('/api/posts', async (req, res) => {
     const { search, category, tag, sort = 'newest', page = 1, limit = 10 } = req.query;
     const now = new Date();
 
-    if (isMongoConnected) {
-      const query = {
-        $or: [
-          { status: 'published', publishedAt: { $lte: now } },
-          { status: 'scheduled', scheduledAt: { $lte: now } }
-        ]
-      };
-      if (search) {
-        query.$or = [
-          { title: { $regex: search, $options: 'i' } },
-          { excerpt: { $regex: search, $options: 'i' } },
-          { labels: { $regex: search, $options: 'i' } }
-        ];
-      }
-      if (category) query.category = category.toLowerCase();
-      if (tag) query.labels = tag.toLowerCase();
+    if (isDbConnected()) {
+      const conditions = [
+        {
+          $or: [
+            { status: 'published' },
+            { status: 'scheduled', scheduledAt: { $lte: now } }
+          ]
+        }
+      ];
 
-      const sortOption = sort === 'oldest' ? { publishedAt: 1 } : { publishedAt: -1 };
+      if (category && category.trim()) {
+        conditions.push({ category: category.trim().toLowerCase() });
+      }
+
+      if (tag && tag.trim()) {
+        conditions.push({ labels: tag.trim().toLowerCase() });
+      }
+
+      if (search && search.trim()) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        conditions.push({
+          $or: [
+            { title: searchRegex },
+            { excerpt: searchRegex },
+            { labels: searchRegex },
+            { content: searchRegex }
+          ]
+        });
+      }
+
+      const query = conditions.length === 1 ? conditions[0] : { $and: conditions };
+
+      const sortOption = sort === 'oldest' ? { publishedAt: 1, createdAt: 1 } : { publishedAt: -1, createdAt: -1 };
       const pNum = Math.max(1, parseInt(page) || 1);
       const lNum = Math.max(1, parseInt(limit) || 10);
       const skip = (pNum - 1) * lNum;
@@ -563,18 +600,19 @@ app.get('/api/posts', async (req, res) => {
 
     // In-memory fallback
     let list = inMemoryPosts.filter(p => {
-      if (p.status === 'published' && (!p.publishedAt || new Date(p.publishedAt) <= now)) return true;
+      if (p.status === 'published') return true;
       if (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now) return true;
       return false;
     });
 
-    if (category) list = list.filter(p => (p.category || '').toLowerCase() === category.toLowerCase());
-    if (tag) list = list.filter(p => (p.labels || []).map(l => l.toLowerCase()).includes(tag.toLowerCase()));
+    if (category) list = list.filter(p => (p.category || '').toLowerCase() === category.trim().toLowerCase());
+    if (tag) list = list.filter(p => (p.labels || []).map(l => l.toLowerCase()).includes(tag.trim().toLowerCase()));
     if (search) {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
       list = list.filter(p =>
         (p.title || '').toLowerCase().includes(q) ||
         (p.excerpt || '').toLowerCase().includes(q) ||
+        (p.content || '').toLowerCase().includes(q) ||
         (p.labels || []).some(l => l.toLowerCase().includes(q))
       );
     }
@@ -596,14 +634,14 @@ app.get('/api/posts', async (req, res) => {
       pagination: { page: pNum, limit: lNum, total, pages: Math.ceil(total / lNum) || 1 }
     });
   } catch (err) {
-    console.error('Error fetching posts:', err);
+    console.error('Error fetching public posts:', err);
     res.status(500).json({ error: 'Failed to fetch posts' });
   }
 });
 
 app.get('/api/posts/categories', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const categories = await BlogPost.distinct('category', { status: 'published' });
       return res.json({ categories: categories.filter(Boolean) });
     }
@@ -616,7 +654,7 @@ app.get('/api/posts/categories', async (req, res) => {
 
 app.get('/api/posts/labels', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const pipeline = [
         { $match: { status: 'published' } },
         { $unwind: '$labels' },
@@ -640,18 +678,27 @@ app.get('/api/posts/labels', async (req, res) => {
 app.get('/api/posts/nav/:currentSlug', async (req, res) => {
   try {
     const { currentSlug } = req.params;
-    if (isMongoConnected) {
-      const current = await BlogPost.findOne({ slug: currentSlug, status: 'published' });
+    const now = new Date();
+    const pubCondition = {
+      $or: [
+        { status: 'published' },
+        { status: 'scheduled', scheduledAt: { $lte: now } }
+      ]
+    };
+
+    if (isDbConnected()) {
+      const current = await BlogPost.findOne({ slug: currentSlug, ...pubCondition });
       if (!current) return res.status(404).json({ error: 'Post not found' });
+      const refDate = current.publishedAt || current.createdAt || now;
       const [prev, nextPost] = await Promise.all([
-        BlogPost.findOne({ status: 'published', publishedAt: { $lt: current.publishedAt } }).sort({ publishedAt: -1 }).select('slug title'),
-        BlogPost.findOne({ status: 'published', publishedAt: { $gt: current.publishedAt } }).sort({ publishedAt: 1 }).select('slug title')
+        BlogPost.findOne({ ...pubCondition, publishedAt: { $lt: refDate } }).sort({ publishedAt: -1, createdAt: -1 }).select('slug title'),
+        BlogPost.findOne({ ...pubCondition, publishedAt: { $gt: refDate } }).sort({ publishedAt: 1, createdAt: 1 }).select('slug title')
       ]);
       return res.json({ previous: prev, next: nextPost });
     }
 
     const published = inMemoryPosts
-      .filter(p => p.status === 'published')
+      .filter(p => p.status === 'published' || (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now))
       .sort((a, b) => new Date(a.publishedAt || a.createdAt) - new Date(b.publishedAt || b.createdAt));
     const idx = published.findIndex(p => p.slug === currentSlug);
     if (idx === -1) return res.status(404).json({ error: 'Post not found' });
@@ -665,15 +712,26 @@ app.get('/api/posts/nav/:currentSlug', async (req, res) => {
 
 app.get('/api/posts/:slug', async (req, res) => {
   try {
-    if (isMongoConnected) {
-      const post = await BlogPost.findOne({ slug: req.params.slug, status: 'published' });
+    const slugParam = req.params.slug;
+    const now = new Date();
+
+    if (isDbConnected()) {
+      const post = await BlogPost.findOne({
+        slug: slugParam,
+        $or: [
+          { status: 'published' },
+          { status: 'scheduled', scheduledAt: { $lte: now } }
+        ]
+      });
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.viewCount = (post.viewCount || 0) + 1;
-      await post.save();
+      await post.save().catch(() => {});
       return res.json({ post });
     }
 
-    const post = inMemoryPosts.find(p => p.slug === req.params.slug && p.status === 'published');
+    const post = inMemoryPosts.find(p => p.slug === slugParam && (
+      p.status === 'published' || (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now)
+    ));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.viewCount = (post.viewCount || 0) + 1;
     res.json({ post });
@@ -685,7 +743,7 @@ app.get('/api/posts/:slug', async (req, res) => {
 /* --- Public Content --- */
 app.get('/api/content/settings', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let settings = await SiteSettings.findOne();
       if (!settings) settings = await SiteSettings.create(initialSettings);
       return res.json({ settings });
@@ -698,7 +756,7 @@ app.get('/api/content/settings', async (req, res) => {
 
 app.get('/api/content/homepage', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let page = await Homepage.findOne();
       if (!page) page = await Homepage.create(initialHomepage);
       return res.json({ page });
@@ -711,7 +769,7 @@ app.get('/api/content/homepage', async (req, res) => {
 
 app.get('/api/content/about', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let profile = await AboutProfile.findOne();
       if (!profile || !profile.biography) {
         profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
@@ -735,7 +793,7 @@ app.get('/api/gallery', async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 24);
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const query = { status: 'published' };
       if (category && category.toLowerCase() !== 'all') {
         query.category = new RegExp('^' + category.trim() + '$', 'i');
@@ -827,7 +885,7 @@ app.get('/api/gallery', async (req, res) => {
 
 app.get('/api/gallery/categories', async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const raw = await GalleryItem.aggregate([
         { $match: { status: 'published' } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
@@ -849,7 +907,7 @@ app.get('/api/gallery/categories', async (req, res) => {
 app.get('/api/gallery/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       return res.json({ photo });
@@ -866,7 +924,7 @@ app.get('/api/gallery/:id', async (req, res) => {
 app.get('/api/admin/stats', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const [total, published, drafts, scheduled, totalPhotos] = await Promise.all([
         BlogPost.countDocuments({ status: { $ne: 'trashed' } }),
         BlogPost.countDocuments({ status: 'published' }),
@@ -893,7 +951,7 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 20);
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const query = {};
       if (status && status !== '') query.status = status;
       else query.status = { $ne: 'trashed' };
@@ -946,7 +1004,7 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       return res.json({ post });
@@ -1084,7 +1142,7 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
       finalPublishedAt = now;
     }
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       // Check duplicate slug
       const existing = await BlogPost.findOne({ slug: postSlug });
       if (existing) {
@@ -1115,6 +1173,11 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
 
       const post = new BlogPost(postData);
       await post.save();
+
+      // Sync to in-memory fallback
+      const plainPost = post.toObject();
+      inMemoryPosts.unshift(plainPost);
+
       return res.status(201).json({ post });
     }
 
@@ -1167,7 +1230,7 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
     const now = new Date();
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
 
@@ -1252,6 +1315,15 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
       }
 
       await post.save();
+
+      // Sync to inMemoryPosts
+      const idx = inMemoryPosts.findIndex(p => String(p._id) === String(post._id));
+      if (idx !== -1) {
+        inMemoryPosts[idx] = post.toObject();
+      } else {
+        inMemoryPosts.unshift(post.toObject());
+      }
+
       return res.json({ post });
     }
 
@@ -1349,11 +1421,13 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'trashed';
       await post.save();
+      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
+      if (inMem) inMem.status = 'trashed';
       return res.json({ success: true });
     }
     const post = inMemoryPosts.find(p => p._id === req.params.id);
@@ -1368,12 +1442,17 @@ app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'published';
       post.publishedAt = new Date();
       await post.save();
+      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
+      if (inMem) {
+        inMem.status = 'published';
+        inMem.publishedAt = post.publishedAt;
+      }
       return res.json({ post });
     }
     const post = inMemoryPosts.find(p => p._id === req.params.id);
@@ -1389,11 +1468,13 @@ app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'draft';
       await post.save();
+      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
+      if (inMem) inMem.status = 'draft';
       return res.json({ post });
     }
     const post = inMemoryPosts.find(p => p._id === req.params.id);
@@ -1408,11 +1489,13 @@ app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const post = await BlogPost.findById(req.params.id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       post.status = 'draft';
       await post.save();
+      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
+      if (inMem) inMem.status = 'draft';
       return res.json({ post });
     }
     const post = inMemoryPosts.find(p => p._id === req.params.id);
@@ -1427,9 +1510,10 @@ app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       await BlogPost.findByIdAndDelete(req.params.id);
       await Revision.deleteMany({ postId: req.params.id }).catch(() => {});
+      inMemoryPosts = inMemoryPosts.filter(p => String(p._id) !== String(req.params.id));
       return res.json({ success: true });
     }
     const idx = inMemoryPosts.findIndex(p => p._id === req.params.id);
@@ -1444,7 +1528,7 @@ app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) =>
 
 app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const original = await BlogPost.findById(req.params.id);
       if (!original) return res.status(404).json({ error: 'Post not found' });
       const dup = new BlogPost({
@@ -1460,6 +1544,7 @@ app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
         seoDescription: original.seoDescription
       });
       await dup.save();
+      inMemoryPosts.unshift(dup.toObject());
       return res.status(201).json({ post: dup });
     }
 
@@ -1487,7 +1572,7 @@ app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
 /* --- Revisions --- */
 app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const revisions = await Revision.find({ postId: req.params.postId }).sort({ savedAt: -1 }).limit(20);
       return res.json({ revisions });
     }
@@ -1500,7 +1585,7 @@ app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const revision = await Revision.findById(req.params.revisionId);
       if (!revision) return res.status(404).json({ error: 'Revision not found' });
       const post = await BlogPost.findById(revision.postId);
@@ -1535,7 +1620,7 @@ app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req,
 /* --- Admin Labels & Categories --- */
 app.get('/api/admin/labels', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const pipeline = [
         { $unwind: '$labels' },
         { $group: { _id: '$labels', count: { $sum: 1 } } },
@@ -1557,7 +1642,7 @@ app.get('/api/admin/labels', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/categories', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const categories = await BlogPost.distinct('category');
       return res.json({ categories: categories.filter(Boolean) });
     }
@@ -1571,7 +1656,7 @@ app.get('/api/admin/categories', authMiddleware, async (req, res) => {
 /* --- Admin Content Update Endpoints --- */
 app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let settings = await SiteSettings.findOne();
       if (!settings) settings = await SiteSettings.create(initialSettings);
       return res.json({ settings });
@@ -1585,7 +1670,7 @@ app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
     inMemorySettings = { ...inMemorySettings, ...req.body };
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const settings = await SiteSettings.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
       return res.json({ settings });
     }
@@ -1598,7 +1683,7 @@ app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let page = await Homepage.findOne();
       if (!page) page = await Homepage.create(initialHomepage);
       return res.json({ page });
@@ -1612,7 +1697,7 @@ app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
     inMemoryHomepage = { ...inMemoryHomepage, ...req.body };
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const page = await Homepage.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
       return res.json({ page });
     }
@@ -1625,7 +1710,7 @@ app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       let profile = await AboutProfile.findOne();
       if (!profile || !profile.biography) {
         profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
@@ -1641,7 +1726,7 @@ app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
     inMemoryAbout = { ...inMemoryAbout, ...req.body };
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const profile = await AboutProfile.findOneAndUpdate(
         {},
         { $set: req.body },
@@ -1663,7 +1748,7 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 50);
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const query = {};
       if (status && status !== 'all') query.status = status;
       if (category && category !== 'all') query.category = new RegExp('^' + category.trim() + '$', 'i');
@@ -1731,7 +1816,7 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
 app.get('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       return res.json({ photo });
@@ -1806,8 +1891,9 @@ app.post('/api/admin/gallery', authMiddleware, (req, res, next) => {
       order: parseInt(order) || 0
     };
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const created = await GalleryItem.create(photoData);
+      inMemoryGallery.unshift(created.toObject());
       return res.status(201).json({ success: true, photo: created });
     }
 
@@ -1863,9 +1949,11 @@ app.put('/api/admin/gallery/:id', authMiddleware, (req, res, next) => {
     if (order !== undefined) updates.order = parseInt(order) || 0;
     updates.updatedAt = new Date();
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const updated = await GalleryItem.findByIdAndUpdate(id, { $set: updates }, { new: true });
       if (!updated) return res.status(404).json({ error: 'Photo not found' });
+      const idx = inMemoryGallery.findIndex(p => String(p._id) === String(id));
+      if (idx !== -1) inMemoryGallery[idx] = updated.toObject();
       return res.json({ success: true, photo: updated });
     }
 
@@ -1885,11 +1973,12 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     let photoUrl = '';
 
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const photo = await GalleryItem.findById(id);
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
       photoUrl = photo.url;
       await GalleryItem.findByIdAndDelete(id);
+      inMemoryGallery = inMemoryGallery.filter(p => String(p._id) !== String(id));
     } else {
       const idx = inMemoryGallery.findIndex(p => p._id === id);
       if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
@@ -1916,8 +2005,10 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'published', updatedAt: new Date() } }, { new: true });
+      const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
+      if (inMem) inMem.status = 'published';
       return res.json({ success: true, photo });
     }
     const p = inMemoryGallery.find(item => item._id === id);
@@ -1933,8 +2024,10 @@ app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'draft', updatedAt: new Date() } }, { new: true });
+      const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
+      if (inMem) inMem.status = 'draft';
       return res.json({ success: true, photo });
     }
     const p = inMemoryGallery.find(item => item._id === id);
@@ -1952,7 +2045,7 @@ app.get('/sitemap.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 }).select('slug publishedAt updatedAt');
     } else {
       posts = inMemoryPosts.filter(p => p.status === 'published');
@@ -1989,7 +2082,7 @@ app.get('/feed.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
     let posts = [];
-    if (isMongoConnected) {
+    if (isDbConnected()) {
       posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 });
     } else {
       posts = inMemoryPosts.filter(p => p.status === 'published');
