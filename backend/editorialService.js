@@ -66,7 +66,7 @@ async function callOpenRouter(messages, options = {}) {
     throw new Error('OPENROUTER_API_KEY is missing');
   }
 
-  const model = options.model || 'google/gemini-2.5-flash';
+  const model = options.model || 'google/gemini-2.0-flash-001';
   const siteUrl = process.env.FRONTEND_URL || 'https://chitron.iam.bd/';
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -143,7 +143,7 @@ async function generateExcerpt(title, content, options = {}) {
         : `Write a concise 1-2 sentence article excerpt/summary for the following text. Capture the main argument. Do not add metadata or extra commentary:\n\nTitle: ${title}\nContent: ${rawText.slice(0, 2000)}`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt
       });
 
@@ -220,7 +220,7 @@ async function generateTags(title, excerpt, content, category, options = {}) {
         : `Generate 3 to 6 relevant short tags/labels separated by commas for this article. Output ONLY comma-separated tags:\n\nTitle: ${title}\nCategory: ${category || ''}\nContent: ${combinedText.slice(0, 1500)}`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt
       });
 
@@ -493,7 +493,7 @@ async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhatt
             font-weight="600"
             fill="#94a3b8"
             letter-spacing="0.05em">
-        BY ${escapeXml(author.toUpperCase())} &middot; CHITRONS ARCHIVE
+        BY ${escapeXml(author.toUpperCase())} &#183; CHITRONS ARCHIVE
       </text>
 
       <!-- Source Credit Tag -->
