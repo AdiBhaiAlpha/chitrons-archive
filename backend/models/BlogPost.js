@@ -14,9 +14,9 @@ const blogPostSchema = new mongoose.Schema({
   },
   excerpt: {
     type: String,
-    required: [true, 'Excerpt is required'],
+    default: '',
     trim: true,
-    maxlength: [600, 'Excerpt too long']
+    maxlength: [1000, 'Excerpt too long']
   },
   content: {
     type: String,
@@ -55,7 +55,28 @@ const blogPostSchema = new mongoose.Schema({
   seoDescription: { type: String, default: '' },
   canonicalUrl: { type: String, default: '' },
   featured: { type: Boolean, default: false },
-  commentsEnabled: { type: Boolean, default: true }
+  commentsEnabled: { type: Boolean, default: true },
+  editorialAutomation: {
+    enabled: { type: Boolean, default: true },
+    excerpt: {
+      source: { type: String, enum: ['manual', 'generated'], default: 'manual' },
+      generatedAt: { type: Date }
+    },
+    tags: {
+      source: { type: String, enum: ['manual', 'generated'], default: 'manual' },
+      generatedAt: { type: Date }
+    },
+    featuredImage: {
+      source: { type: String, enum: ['manual', 'stock'], default: 'manual' },
+      provider: { type: String, default: '' },
+      providerImageId: { type: String, default: '' },
+      sourceUrl: { type: String, default: '' },
+      photographer: { type: String, default: '' },
+      photographerUrl: { type: String, default: '' },
+      searchQuery: { type: String, default: '' },
+      generatedAt: { type: Date }
+    }
+  }
 }, {
   timestamps: true
 });

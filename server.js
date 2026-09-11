@@ -11,6 +11,27 @@ const multer = require('multer');
 
 require('dotenv').config();
 
+const editorialService = require('./backend/editorialService');
+
+function generateSlug(text, customSlug) {
+  const source = (customSlug && customSlug.trim()) ? customSlug.trim() : (text || '');
+  if (!source) return 'post-' + Date.now();
+
+  let slug = source
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!slug || slug.length < 2) {
+    slug = 'post-' + Date.now();
+  }
+  return slug;
+}
+
 const PORT = 3000;
 const HOST = '0.0.0.0';
 const ADMIN_PIN = process.env.ADMIN_PIN || '123456';
@@ -938,43 +959,158 @@ app.get('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/admin/posts', authMiddleware, async (req, res) => {
+/* --- Editorial Automation & Preview Endpoints --- */
+app.post('/api/admin/posts/preview', authMiddleware, async (req, res) => {
   try {
-    const {
-      title, excerpt, content, coverImage, category, labels, slug, status,
-      seoTitle, seoDescription, canonicalUrl, scheduledAt, featured, commentsEnabled
-    } = req.body;
+    const { title, excerpt, content, category, labels, coverImage, autoExcerpt = true, autoTags = true, autoImage = true } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required for preview' });
+    }
+    const rawPost = {
+      title: title.trim(),
+      excerpt: (excerpt || '').trim(),
+      content: content || '',
+      coverImage: (coverImage || '').trim(),
+      author: 'Chitron Bhattacharjee',
+      category: (category || 'general').trim().toLowerCase(),
+      labels: Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [],
+      slug: generateSlug(title)
+    };
+    const enriched = await editorialService.enrichPostData(rawPost, {
+      autoExcerpt: autoExcerpt !== false,
+      autoTags: autoTags !== false,
+      autoImage: autoImage !== false
+    });
+    res.json({ post: enriched });
+  } catch (err) {
+    console.error('Error generating preview:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate preview' });
+  }
+});
 
-    if (!title || !excerpt) {
-      return res.status(400).json({ error: 'Title and excerpt are required' });
+app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) => {
+  try {
+    const { field, title, content, category, excerpt, labels } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
     }
 
-    let postSlug = slug || slugify(title, { lower: true, strict: true });
-    const postStatus = status || 'draft';
+    if (field === 'excerpt') {
+      const generated = await editorialService.generateExcerpt(title, content);
+      return res.json({ value: generated, source: 'generated' });
+    } else if (field === 'tags') {
+      const generated = await editorialService.generateTags(title, excerpt, content, category);
+      return res.json({ value: generated, source: 'generated' });
+    } else if (field === 'featuredImage') {
+      const query = editorialService.extractSearchKeywords(title, content, category);
+      const stock = await editorialService.searchStockImage(query);
+      if (stock) {
+        const imgUrl = await editorialService.createFeaturedImage(stock, title, 'Chitron Bhattacharjee', generateSlug(title));
+        return res.json({
+          value: imgUrl,
+          source: 'stock',
+          metadata: {
+            provider: stock.provider,
+            providerImageId: stock.providerImageId,
+            sourceUrl: stock.sourceUrl,
+            photographer: stock.photographer,
+            photographerUrl: stock.photographerUrl,
+            searchQuery: stock.searchQuery
+          }
+        });
+      }
+      return res.status(404).json({ error: 'No stock image found' });
+    }
+    res.status(400).json({ error: 'Invalid field specified' });
+  } catch (err) {
+    console.error('Error regenerating field:', err);
+    res.status(500).json({ error: err.message || 'Failed to regenerate field' });
+  }
+});
+
+/* --- Create Post --- */
+app.post('/api/admin/posts', authMiddleware, async (req, res) => {
+  try {
+    let {
+      title, excerpt, content, coverImage, category, labels, slug, status,
+      seoTitle, seoDescription, canonicalUrl, scheduledAt, featured, commentsEnabled,
+      autoExcerpt = true, autoTags = true, autoImage = true
+    } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    // 1. Generate clean Unicode/Bengali slug
+    let postSlug = generateSlug(title, slug);
+
+    // 2. Enrich post with Editorial Automation Pipeline
+    const rawPost = {
+      title: title.trim(),
+      excerpt: (excerpt || '').trim(),
+      content: content || '',
+      coverImage: (coverImage || '').trim(),
+      author: 'Chitron Bhattacharjee',
+      category: (category || 'general').trim().toLowerCase(),
+      labels: Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [],
+      slug: postSlug
+    };
+
+    const enriched = await editorialService.enrichPostData(rawPost, {
+      autoExcerpt: autoExcerpt !== false,
+      autoTags: autoTags !== false,
+      autoImage: autoImage !== false
+    });
+
+    // 3. Normalization of dates and status
+    let postStatus = status || 'draft';
     const now = new Date();
+    let finalPublishedAt = null;
+    let finalScheduledAt = null;
+
+    if (postStatus === 'scheduled' && scheduledAt) {
+      const parsedSched = new Date(scheduledAt);
+      if (isNaN(parsedSched.getTime())) {
+        return res.status(400).json({ error: 'Invalid scheduled date/time' });
+      }
+      if (parsedSched > now) {
+        finalScheduledAt = parsedSched;
+      } else {
+        // Scheduled date in past/present -> publish immediately
+        postStatus = 'published';
+        finalPublishedAt = parsedSched;
+      }
+    } else if (postStatus === 'published') {
+      finalPublishedAt = now;
+    }
 
     if (isMongoConnected) {
+      // Check duplicate slug
       const existing = await BlogPost.findOne({ slug: postSlug });
-      if (existing) postSlug = `${postSlug}-${Date.now()}`;
+      if (existing) {
+        postSlug = `${postSlug}-${Date.now().toString(36)}`;
+        enriched.slug = postSlug;
+      }
 
       const postData = {
-        title,
+        title: enriched.title,
         slug: postSlug,
-        excerpt,
-        content: content || '',
-        coverImage: coverImage || '',
-        author: 'Chitron Bhattacharjee',
-        category: (category || 'general').toLowerCase(),
-        labels: Array.isArray(labels) ? labels.map(l => l.toLowerCase().trim()).filter(Boolean) : [],
+        excerpt: enriched.excerpt,
+        content: enriched.content,
+        coverImage: enriched.coverImage,
+        author: enriched.author,
+        category: enriched.category,
+        labels: enriched.labels,
         status: postStatus,
-        publishedAt: postStatus === 'published' ? now : null,
-        scheduledAt: postStatus === 'scheduled' && scheduledAt ? new Date(scheduledAt) : null,
-        readingTime: calcReadingTime(content),
-        seoTitle: seoTitle || '',
-        seoDescription: seoDescription || '',
-        canonicalUrl: canonicalUrl || '',
+        publishedAt: finalPublishedAt,
+        scheduledAt: finalScheduledAt,
+        readingTime: calcReadingTime(enriched.content),
+        seoTitle: (seoTitle || '').trim(),
+        seoDescription: (seoDescription || '').trim(),
+        canonicalUrl: (canonicalUrl || '').trim(),
         featured: !!featured,
-        commentsEnabled: commentsEnabled !== false
+        commentsEnabled: commentsEnabled !== false,
+        editorialAutomation: enriched.editorialAutomation
       };
 
       const post = new BlogPost(postData);
@@ -982,30 +1118,32 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
       return res.status(201).json({ post });
     }
 
+    // In-memory fallback
     if (inMemoryPosts.some(p => p.slug === postSlug)) {
-      postSlug = `${postSlug}-${Date.now()}`;
+      postSlug = `${postSlug}-${Date.now().toString(36)}`;
     }
 
     const newPost = {
       _id: `post-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      title,
+      title: enriched.title,
       slug: postSlug,
-      excerpt,
-      content: content || '',
-      coverImage: coverImage || '',
-      author: 'Chitron Bhattacharjee',
-      category: (category || 'general').toLowerCase(),
-      labels: Array.isArray(labels) ? labels.map(l => l.toLowerCase().trim()).filter(Boolean) : [],
+      excerpt: enriched.excerpt,
+      content: enriched.content,
+      coverImage: enriched.coverImage,
+      author: enriched.author,
+      category: enriched.category,
+      labels: enriched.labels,
       status: postStatus,
-      publishedAt: postStatus === 'published' ? now : null,
-      scheduledAt: postStatus === 'scheduled' && scheduledAt ? new Date(scheduledAt) : null,
-      readingTime: calcReadingTime(content),
+      publishedAt: finalPublishedAt,
+      scheduledAt: finalScheduledAt,
+      readingTime: calcReadingTime(enriched.content),
       viewCount: 0,
-      seoTitle: seoTitle || '',
-      seoDescription: seoDescription || '',
-      canonicalUrl: canonicalUrl || '',
+      seoTitle: (seoTitle || '').trim(),
+      seoDescription: (seoDescription || '').trim(),
+      canonicalUrl: (canonicalUrl || '').trim(),
       featured: !!featured,
       commentsEnabled: commentsEnabled !== false,
+      editorialAutomation: enriched.editorialAutomation,
       createdAt: now,
       updatedAt: now
     };
@@ -1013,17 +1151,21 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
     inMemoryPosts.unshift(newPost);
     res.status(201).json({ post: newPost });
   } catch (err) {
-    console.error('Error creating post:', err);
-    res.status(500).json({ error: 'Failed to create post' });
+    console.error('CRITICAL Error in POST /api/admin/posts:', err);
+    res.status(500).json({ error: err.message || 'Failed to create post' });
   }
 });
 
+/* --- Update Post --- */
 app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
     const {
       title, excerpt, content, coverImage, category, labels, slug, status,
-      seoTitle, seoDescription, canonicalUrl, scheduledAt, featured, commentsEnabled
+      seoTitle, seoDescription, canonicalUrl, scheduledAt, featured, commentsEnabled,
+      autoExcerpt = true, autoTags = true, autoImage = true
     } = req.body;
+
+    const now = new Date();
 
     if (isMongoConnected) {
       const post = await BlogPost.findById(req.params.id);
@@ -1039,42 +1181,81 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
         category: post.category
       }).save().catch(() => {});
 
-      if (title && title !== post.title) {
-        let newSlug = slug || slugify(title, { lower: true, strict: true });
+      if (title) post.title = title.trim();
+
+      // Slug update
+      if (title || slug) {
+        let newSlug = generateSlug(title || post.title, slug || post.slug);
         const dup = await BlogPost.findOne({ slug: newSlug, _id: { $ne: post._id } });
-        if (dup) newSlug = `${newSlug}-${Date.now()}`;
+        if (dup) newSlug = `${newSlug}-${Date.now().toString(36)}`;
         post.slug = newSlug;
       }
 
-      if (title) post.title = title;
-      if (excerpt) post.excerpt = excerpt;
       if (content !== undefined) {
         post.content = content;
         post.readingTime = calcReadingTime(content);
       }
-      if (coverImage !== undefined) post.coverImage = coverImage;
-      if (category) post.category = category.toLowerCase();
-      if (labels) post.labels = labels.map(l => l.toLowerCase().trim()).filter(Boolean);
-      if (seoTitle !== undefined) post.seoTitle = seoTitle;
-      if (seoDescription !== undefined) post.seoDescription = seoDescription;
-      if (canonicalUrl !== undefined) post.canonicalUrl = canonicalUrl;
-      if (featured !== undefined) post.featured = featured;
-      if (commentsEnabled !== undefined) post.commentsEnabled = commentsEnabled;
-
-      if (status && status !== post.status) {
-        post.status = status;
-        if (status === 'published' && !post.publishedAt) post.publishedAt = new Date();
-        else if (status === 'scheduled' && scheduledAt) post.scheduledAt = new Date(scheduledAt);
+      if (category) post.category = category.trim().toLowerCase();
+      if (labels !== undefined) {
+        post.labels = Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [];
       }
 
-      if (scheduledAt && post.status === 'scheduled') {
-        post.scheduledAt = new Date(scheduledAt);
+      // Re-run editorial automation if missing fields
+      const rawPost = {
+        title: post.title,
+        excerpt: excerpt !== undefined ? excerpt.trim() : post.excerpt,
+        content: post.content,
+        coverImage: coverImage !== undefined ? coverImage.trim() : post.coverImage,
+        author: post.author,
+        category: post.category,
+        labels: post.labels,
+        slug: post.slug,
+        editorialAutomation: post.editorialAutomation
+      };
+
+      const enriched = await editorialService.enrichPostData(rawPost, {
+        autoExcerpt: autoExcerpt !== false,
+        autoTags: autoTags !== false,
+        autoImage: autoImage !== false
+      });
+
+      post.excerpt = enriched.excerpt;
+      post.labels = enriched.labels;
+      post.coverImage = enriched.coverImage;
+      post.editorialAutomation = enriched.editorialAutomation;
+
+      if (seoTitle !== undefined) post.seoTitle = seoTitle.trim();
+      if (seoDescription !== undefined) post.seoDescription = seoDescription.trim();
+      if (canonicalUrl !== undefined) post.canonicalUrl = canonicalUrl.trim();
+      if (featured !== undefined) post.featured = !!featured;
+      if (commentsEnabled !== undefined) post.commentsEnabled = commentsEnabled !== false;
+
+      let postStatus = status || post.status;
+      if (postStatus === 'scheduled' && scheduledAt) {
+        const parsedSched = new Date(scheduledAt);
+        if (!isNaN(parsedSched.getTime())) {
+          if (parsedSched > now) {
+            post.status = 'scheduled';
+            post.scheduledAt = parsedSched;
+          } else {
+            post.status = 'published';
+            post.publishedAt = parsedSched;
+            post.scheduledAt = null;
+          }
+        }
+      } else if (postStatus === 'published') {
+        post.status = 'published';
+        if (!post.publishedAt) post.publishedAt = now;
+        post.scheduledAt = null;
+      } else if (postStatus) {
+        post.status = postStatus;
       }
 
       await post.save();
       return res.json({ post });
     }
 
+    // In-memory fallback
     const post = inMemoryPosts.find(p => p._id === req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
@@ -1086,46 +1267,83 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
       excerpt: post.excerpt,
       labels: [...(post.labels || [])],
       category: post.category,
-      savedAt: new Date()
+      savedAt: now
     });
 
-    if (title && title !== post.title) {
-      let newSlug = slug || slugify(title, { lower: true, strict: true });
+    if (title) post.title = title.trim();
+
+    if (title || slug) {
+      let newSlug = generateSlug(title || post.title, slug || post.slug);
       if (inMemoryPosts.some(p => p.slug === newSlug && p._id !== post._id)) {
-        newSlug = `${newSlug}-${Date.now()}`;
+        newSlug = `${newSlug}-${Date.now().toString(36)}`;
       }
       post.slug = newSlug;
     }
 
-    if (title) post.title = title;
-    if (excerpt) post.excerpt = excerpt;
     if (content !== undefined) {
       post.content = content;
       post.readingTime = calcReadingTime(content);
     }
-    if (coverImage !== undefined) post.coverImage = coverImage;
-    if (category) post.category = category.toLowerCase();
-    if (labels) post.labels = labels.map(l => l.toLowerCase().trim()).filter(Boolean);
-    if (seoTitle !== undefined) post.seoTitle = seoTitle;
-    if (seoDescription !== undefined) post.seoDescription = seoDescription;
-    if (canonicalUrl !== undefined) post.canonicalUrl = canonicalUrl;
-    if (featured !== undefined) post.featured = featured;
-    if (commentsEnabled !== undefined) post.commentsEnabled = commentsEnabled;
-
-    if (status && status !== post.status) {
-      post.status = status;
-      if (status === 'published' && !post.publishedAt) post.publishedAt = new Date();
-      else if (status === 'scheduled' && scheduledAt) post.scheduledAt = new Date(scheduledAt);
+    if (category) post.category = category.trim().toLowerCase();
+    if (labels !== undefined) {
+      post.labels = Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [];
     }
 
-    if (scheduledAt && post.status === 'scheduled') {
-      post.scheduledAt = new Date(scheduledAt);
+    const rawPost = {
+      title: post.title,
+      excerpt: excerpt !== undefined ? excerpt.trim() : post.excerpt,
+      content: post.content,
+      coverImage: coverImage !== undefined ? coverImage.trim() : post.coverImage,
+      author: post.author,
+      category: post.category,
+      labels: post.labels,
+      slug: post.slug,
+      editorialAutomation: post.editorialAutomation
+    };
+
+    const enriched = await editorialService.enrichPostData(rawPost, {
+      autoExcerpt: autoExcerpt !== false,
+      autoTags: autoTags !== false,
+      autoImage: autoImage !== false
+    });
+
+    post.excerpt = enriched.excerpt;
+    post.labels = enriched.labels;
+    post.coverImage = enriched.coverImage;
+    post.editorialAutomation = enriched.editorialAutomation;
+
+    if (seoTitle !== undefined) post.seoTitle = seoTitle.trim();
+    if (seoDescription !== undefined) post.seoDescription = seoDescription.trim();
+    if (canonicalUrl !== undefined) post.canonicalUrl = canonicalUrl.trim();
+    if (featured !== undefined) post.featured = !!featured;
+    if (commentsEnabled !== undefined) post.commentsEnabled = commentsEnabled !== false;
+
+    let postStatus = status || post.status;
+    if (postStatus === 'scheduled' && scheduledAt) {
+      const parsedSched = new Date(scheduledAt);
+      if (!isNaN(parsedSched.getTime())) {
+        if (parsedSched > now) {
+          post.status = 'scheduled';
+          post.scheduledAt = parsedSched;
+        } else {
+          post.status = 'published';
+          post.publishedAt = parsedSched;
+          post.scheduledAt = null;
+        }
+      }
+    } else if (postStatus === 'published') {
+      post.status = 'published';
+      if (!post.publishedAt) post.publishedAt = now;
+      post.scheduledAt = null;
+    } else if (postStatus) {
+      post.status = postStatus;
     }
 
-    post.updatedAt = new Date();
+    post.updatedAt = now;
     res.json({ post });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update post' });
+    console.error('Error updating post:', err);
+    res.status(500).json({ error: err.message || 'Failed to update post' });
   }
 });
 

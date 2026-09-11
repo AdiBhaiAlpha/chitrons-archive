@@ -41,6 +41,41 @@
     confirm.onclick = () => { close(); onConfirm(); };
   }
 
+  function showPreviewModal(post) {
+    let overlay = $('#preview-modal-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'preview-modal-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+      overlay.innerHTML = `
+        <div style="background:var(--bg-card, #fff);color:var(--text-primary, #111);width:100%;max-width:800px;max-height:90vh;overflow-y:auto;border-radius:12px;padding:24px;position:relative;box-shadow:0 20px 40px rgba(0,0,0,0.3)">
+          <button id="close-preview-modal" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-secondary)">&times;</button>
+          <div id="preview-modal-content"></div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#close-preview-modal').addEventListener('click', () => {
+        overlay.style.display = 'none';
+      });
+    }
+    const container = overlay.querySelector('#preview-modal-content');
+    container.innerHTML = `
+      <div style="font-size:12px;text-transform:uppercase;color:var(--accent, #3b82f6);font-weight:600;margin-bottom:8px">Editorial Preview</div>
+      <h1 style="font-size:28px;margin:0 0 12px 0;line-height:1.3">${esc(post.title)}</h1>
+      ${post.coverImage ? `<img src="${esc(post.coverImage)}" style="width:100%;max-height:350px;object-fit:cover;border-radius:8px;margin-bottom:16px" alt="Cover Image">` : ''}
+      <div style="background:var(--bg-secondary, #f8f9fa);padding:14px;border-left:3px solid var(--accent, #3b82f6);border-radius:4px;margin-bottom:16px;font-style:italic">
+        <strong>Excerpt:</strong> ${esc(post.excerpt)}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+        ${(post.labels || []).map(t => `<span style="background:var(--bg-tertiary, #e9ecef);padding:3px 8px;border-radius:12px;font-size:12px">#${esc(t)}</span>`).join('')}
+      </div>
+      <div style="line-height:1.7;font-size:15px;color:var(--text-primary)">
+        ${post.content || '<p style="color:var(--text-secondary)">(No article content yet)</p>'}
+      </div>
+    `;
+    overlay.style.display = 'flex';
+  }
+
   function formatDate(d) {
     if (!d) return '-';
     return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -303,6 +338,9 @@
       slug: $('#editor-slug').value.trim() || undefined,
       seoTitle: $('#editor-seo-title').value.trim(),
       seoDescription: $('#editor-seo-desc').value.trim(),
+      autoExcerpt: $('#auto-excerpt-toggle') ? $('#auto-excerpt-toggle').checked : true,
+      autoTags: $('#auto-tags-toggle') ? $('#auto-tags-toggle').checked : true,
+      autoImage: $('#auto-image-toggle') ? $('#auto-image-toggle').checked : true
     };
 
     if (publish) {
@@ -318,21 +356,36 @@
     }
 
     if (!data.title) { toast('Title is required', 'error'); return; }
-    if (!data.excerpt) { toast('Excerpt is required', 'error'); return; }
+
+    updateSaveStatus('saving');
 
     try {
+      let res;
       if (editingPostId) {
-        await API.adminUpdatePost(editingPostId, data);
+        res = await API.adminUpdatePost(editingPostId, data);
         toast(publish ? 'Post updated and published' : 'Draft saved');
       } else {
-        const res = await API.adminCreatePost(data);
-        editingPostId = res.post._id;
+        res = await API.adminCreatePost(data);
+        if (res && res.post) {
+          editingPostId = res.post._id;
+        }
         toast(publish ? 'Post published' : 'Draft saved');
       }
+
+      if (res && res.post) {
+        if (res.post.excerpt) $('#editor-excerpt').value = res.post.excerpt;
+        if (res.post.coverImage) $('#editor-cover').value = res.post.coverImage;
+        if (res.post.labels && Array.isArray(res.post.labels)) {
+          postTags = res.post.labels;
+          renderTags();
+        }
+      }
+
       isDirty = false;
       updateSaveStatus('saved');
       if (publish) switchView('posts', '');
     } catch (e) {
+      console.error('Error saving post:', e);
       if (e.message && e.message.toLowerCase().includes('unauthorized')) {
         toast('Session expired or unauthorized. Please enter your PIN to continue.', 'error');
         showLogin();
@@ -1103,6 +1156,114 @@
         newPost();
       }
     });
+
+    /* Editorial Automation Regeneration Handlers */
+    const btnRegenExcerpt = $('#btn-regen-excerpt');
+    if (btnRegenExcerpt) {
+      btnRegenExcerpt.addEventListener('click', async () => {
+        const title = $('#editor-title').value.trim();
+        const content = $('#editor-content').innerHTML;
+        if (!title) { toast('Enter a title first', 'error'); return; }
+        btnRegenExcerpt.disabled = true;
+        btnRegenExcerpt.textContent = 'Generating...';
+        try {
+          const res = await API.adminRegenerateField({ field: 'excerpt', title, content });
+          if (res && res.value) {
+            $('#editor-excerpt').value = res.value;
+            markDirty();
+            toast('Excerpt generated');
+          }
+        } catch (e) {
+          toast(e.message || 'Failed to generate excerpt', 'error');
+        } finally {
+          btnRegenExcerpt.disabled = false;
+          btnRegenExcerpt.textContent = 'Auto-Generate';
+        }
+      });
+    }
+
+    const btnRegenTags = $('#btn-regen-tags');
+    if (btnRegenTags) {
+      btnRegenTags.addEventListener('click', async () => {
+        const title = $('#editor-title').value.trim();
+        const content = $('#editor-content').innerHTML;
+        const category = $('#editor-category').value.trim();
+        const excerpt = $('#editor-excerpt').value.trim();
+        if (!title) { toast('Enter a title first', 'error'); return; }
+        btnRegenTags.disabled = true;
+        btnRegenTags.textContent = 'Generating...';
+        try {
+          const res = await API.adminRegenerateField({ field: 'tags', title, content, category, excerpt });
+          if (res && res.value && Array.isArray(res.value)) {
+            postTags = res.value;
+            renderTags();
+            markDirty();
+            toast('Tags generated');
+          }
+        } catch (e) {
+          toast(e.message || 'Failed to generate tags', 'error');
+        } finally {
+          btnRegenTags.disabled = false;
+          btnRegenTags.textContent = 'Auto-Generate';
+        }
+      });
+    }
+
+    const btnRegenImage = $('#btn-regen-image');
+    if (btnRegenImage) {
+      btnRegenImage.addEventListener('click', async () => {
+        const title = $('#editor-title').value.trim();
+        const content = $('#editor-content').innerHTML;
+        const category = $('#editor-category').value.trim();
+        if (!title) { toast('Enter a title first', 'error'); return; }
+        btnRegenImage.disabled = true;
+        btnRegenImage.textContent = 'Searching...';
+        try {
+          const res = await API.adminRegenerateField({ field: 'featuredImage', title, content, category });
+          if (res && res.value) {
+            $('#editor-cover').value = res.value;
+            markDirty();
+            toast('Stock photo & cover image created!');
+          }
+        } catch (e) {
+          toast(e.message || 'No stock photo found', 'error');
+        } finally {
+          btnRegenImage.disabled = false;
+          btnRegenImage.textContent = 'Find Stock Image';
+        }
+      });
+    }
+
+    const editorPreview = $('#editor-preview');
+    if (editorPreview) {
+      editorPreview.addEventListener('click', async () => {
+        const data = {
+          title: $('#editor-title').value.trim(),
+          excerpt: $('#editor-excerpt').value.trim(),
+          content: $('#editor-content').innerHTML,
+          coverImage: $('#editor-cover').value.trim(),
+          category: $('#editor-category').value.trim() || 'general',
+          labels: postTags,
+          autoExcerpt: $('#auto-excerpt-toggle') ? $('#auto-excerpt-toggle').checked : true,
+          autoTags: $('#auto-tags-toggle') ? $('#auto-tags-toggle').checked : true,
+          autoImage: $('#auto-image-toggle') ? $('#auto-image-toggle').checked : true
+        };
+        if (!data.title) { toast('Title is required to preview', 'error'); return; }
+        editorPreview.disabled = true;
+        editorPreview.textContent = 'Loading...';
+        try {
+          const res = await API.adminPreviewPost(data);
+          if (res && res.post) {
+            showPreviewModal(res.post);
+          }
+        } catch (e) {
+          toast(e.message || 'Failed to preview post', 'error');
+        } finally {
+          editorPreview.disabled = false;
+          editorPreview.textContent = 'Preview';
+        }
+      });
+    }
 
     /* Labels */
     $('#add-label-btn').addEventListener('click', () => {

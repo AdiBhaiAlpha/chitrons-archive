@@ -200,12 +200,30 @@
                 <div class="spacer"></div>
                 <button class="btn btn-ghost btn-sm" id="editor-discard">Discard</button>
                 <button class="btn btn-secondary btn-sm" id="editor-save-draft">Save Draft</button>
-                <button class="btn btn-secondary btn-sm" id="editor-preview" disabled>Preview</button>
+                <button class="btn btn-secondary btn-sm" id="editor-preview">Preview</button>
                 <button class="btn btn-primary btn-sm" id="editor-publish">Publish</button>
               </div>
             </div>
 
             <div class="editor-sidebar">
+              <div class="editor-card">
+                <div class="editor-card-header">Editorial Assistance</div>
+                <div class="editor-card-body" style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="auto-excerpt-toggle" checked>
+                    <span>Auto-generate Excerpt if empty</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="auto-tags-toggle" checked>
+                    <span>Auto-generate Tags if empty</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="auto-image-toggle" checked>
+                    <span>Auto-find Stock Photo & Create Image</span>
+                  </label>
+                </div>
+              </div>
+
               <div class="editor-card">
                 <div class="editor-card-header">Post Settings</div>
                 <div class="editor-card-body">
@@ -215,12 +233,20 @@
                     <div class="help">Leave blank to auto-generate from title</div>
                   </div>
                   <div class="field">
-                    <label for="editor-excerpt">Excerpt</label>
-                    <textarea id="editor-excerpt" rows="3" placeholder="Brief description of this post"></textarea>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <label for="editor-excerpt" style="margin:0">Excerpt</label>
+                      <button type="button" id="btn-regen-excerpt" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--accent)">Auto-Generate</button>
+                    </div>
+                    <textarea id="editor-excerpt" rows="3" placeholder="Leave blank to generate automatically"></textarea>
+                    <div class="help">Author input is never overwritten.</div>
                   </div>
                   <div class="field">
-                    <label for="editor-cover">Cover Image URL</label>
-                    <input type="url" id="editor-cover" placeholder="https://...">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <label for="editor-cover" style="margin:0">Cover Image URL</label>
+                      <button type="button" id="btn-regen-image" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--accent)">Find Stock Image</button>
+                    </div>
+                    <input type="url" id="editor-cover" placeholder="https://... or leave empty for auto stock photo">
+                    <div class="help">Searches Pixabay/Pexels & overlays title.</div>
                   </div>
                   <div class="field">
                     <label for="editor-category">Category</label>
@@ -228,9 +254,12 @@
                     <datalist id="category-list"></datalist>
                   </div>
                   <div class="field">
-                    <label>Labels / Tags</label>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <label style="margin:0">Labels / Tags</label>
+                      <button type="button" id="btn-regen-tags" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--accent)">Auto-Generate</button>
+                    </div>
                     <div class="tags-input" id="tags-input">
-                      <input type="text" id="tag-input" placeholder="Add label...">
+                      <input type="text" id="tag-input" placeholder="Add label or leave empty for auto...">
                     </div>
                   </div>
                 </div>

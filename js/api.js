@@ -161,6 +161,14 @@ const API = (() => {
       return request('/api/admin/posts', { method: 'POST', body: JSON.stringify(data) });
     },
 
+    async adminPreviewPost(data) {
+      return request('/api/admin/posts/preview', { method: 'POST', body: JSON.stringify(data) });
+    },
+
+    async adminRegenerateField(data) {
+      return request('/api/admin/posts/regenerate-field', { method: 'POST', body: JSON.stringify(data) });
+    },
+
     async adminUpdatePost(id, data) {
       return request('/api/admin/posts/' + id, { method: 'PUT', body: JSON.stringify(data) });
     },
