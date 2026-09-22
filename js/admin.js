@@ -627,7 +627,7 @@
 
   /* --- Gallery Management (ImgBB Integration & Photo CRUD) --- */
   async function loadGallery() {
-    const grid = $('#gallery-grid');
+    const grid = $('#admin-gallery-grid') || $('#gallery-grid');
     if (!grid) return;
 
     try {
@@ -679,13 +679,90 @@
     select.innerHTML = html;
   }
 
+  let adminLightboxIndex = 0;
+
+  function openAdminLightbox(index) {
+    if (!galleryPhotosCache || galleryPhotosCache.length === 0) return;
+    adminLightboxIndex = Math.max(0, Math.min(index, galleryPhotosCache.length - 1));
+    const photo = galleryPhotosCache[adminLightboxIndex];
+    if (!photo) return;
+
+    const modal = $('#admin-gallery-lightbox');
+    const img = $('#admin-lightbox-img');
+    const title = $('#admin-lightbox-title');
+    const meta = $('#admin-lightbox-meta');
+    const caption = $('#admin-lightbox-caption');
+    const openLink = $('#admin-lightbox-open-link');
+
+    if (modal) modal.style.display = 'flex';
+    if (img) {
+      img.style.opacity = '0';
+      img.src = photo.url;
+      img.onload = () => {
+        img.style.opacity = '1';
+        if (meta && img.naturalWidth && img.naturalHeight) {
+          const dateStr = photo.date ? formatDate(photo.date) : '';
+          meta.textContent = `${photo.category || 'Photography'} • ${photo.status.toUpperCase()} • ${img.naturalWidth}×${img.naturalHeight}px${dateStr ? ' • ' + dateStr : ''}`;
+        }
+      };
+    }
+    if (title) title.textContent = photo.title || 'Untitled Photo';
+    if (meta) {
+      const dateStr = photo.date ? formatDate(photo.date) : '';
+      meta.textContent = `${photo.category || 'Photography'} • ${photo.status.toUpperCase()}${dateStr ? ' • ' + dateStr : ''}`;
+    }
+    if (caption) {
+      caption.textContent = photo.caption || (photo.location ? `Location: ${photo.location}` : '');
+    }
+    if (openLink) {
+      openLink.href = photo.url;
+    }
+  }
+
+  function closeAdminLightbox() {
+    const modal = $('#admin-gallery-lightbox');
+    if (modal) modal.style.display = 'none';
+    const img = $('#admin-lightbox-img');
+    if (img) img.src = '';
+  }
+
+  function navAdminLightbox(direction) {
+    if (!galleryPhotosCache || galleryPhotosCache.length === 0) return;
+    const newIndex = (adminLightboxIndex + direction + galleryPhotosCache.length) % galleryPhotosCache.length;
+    openAdminLightbox(newIndex);
+  }
+
+  function updateGalleryBulkBar() {
+    const checked = $$('.admin-gallery-check:checked');
+    const count = checked.length;
+    const bar = $('#gallery-bulk-bar');
+    const countLabel = $('#gallery-bulk-count');
+    const selectAll = $('#gallery-select-all');
+
+    if (countLabel) countLabel.textContent = `${count} selected`;
+
+    if (bar) {
+      if (count > 0) {
+        bar.classList.add('visible');
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    if (selectAll) {
+      const allChecks = $$('.admin-gallery-check');
+      selectAll.checked = allChecks.length > 0 && count === allChecks.length;
+      selectAll.indeterminate = count > 0 && count < allChecks.length;
+    }
+  }
+
   function renderGalleryGrid(photos) {
-    const grid = $('#gallery-grid');
+    const grid = $('#admin-gallery-grid') || $('#gallery-grid');
     if (!grid) return;
 
     if (!photos || photos.length === 0) {
       grid.innerHTML = `
-        <div class="gallery-empty-state">
+        <div class="admin-gallery-empty-state">
           <svg style="width:40px;height:40px;margin:0 auto 10px;color:var(--text-tertiary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           <div style="font-weight:600;font-size:14px">No photos found</div>
           <p>There are no photos matching your criteria. Upload a new image to get started.</p>
@@ -694,34 +771,42 @@
       `;
       const emptyBtn = $('#empty-state-upload-btn');
       if (emptyBtn) emptyBtn.addEventListener('click', () => openGalleryUploadForm());
+      updateGalleryBulkBar();
       return;
     }
 
-    grid.innerHTML = photos.map(photo => {
+    grid.innerHTML = photos.map((photo, index) => {
       const statusClass = photo.status === 'published' ? 'published' : 'draft';
       const isFeatured = photo.featured;
       const dateStr = photo.date ? formatDate(photo.date) : '';
       const tagsList = Array.isArray(photo.tags) ? photo.tags.join(', ') : (photo.tags || '');
 
       return `
-        <div class="gallery-card" data-id="${photo._id}">
-          <div class="gallery-card-thumb">
-            <img src="${esc(photo.url)}" alt="${esc(photo.alt || photo.title)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23eee%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 fill=%22%23999%22 dy=%22.3em%22>Image Error</text></svg>'">
-            <div class="gallery-card-badges">
-              <span class="status-badge ${statusClass}">${photo.status}</span>
-              ${isFeatured ? '<span class="gallery-card-badge featured">★ Featured</span>' : ''}
-              ${photo.category ? `<span class="gallery-card-badge category">${esc(photo.category)}</span>` : ''}
-            </div>
+        <div class="admin-gallery-card" data-id="${photo._id}" id="admin-gallery-card-${photo._id}">
+          <div class="admin-gallery-select-wrap" title="Select photo">
+            <input type="checkbox" class="admin-checkbox admin-gallery-check" value="${photo._id}" data-id="${photo._id}" aria-label="Select ${esc(photo.title)}">
           </div>
-          <div class="gallery-card-body">
-            <div class="gallery-card-title" title="${esc(photo.title)}">${esc(photo.title)}</div>
-            <div class="gallery-card-meta">
+          <div class="admin-gallery-thumb" data-index="${index}" title="Click to view high-resolution photo in Lightbox">
+            <img class="admin-gallery-img" src="${esc(photo.url)}" alt="${esc(photo.alt || photo.title)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23eee%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 fill=%22%23999%22 dy=%22.3em%22>Image Error</text></svg>'">
+            <div class="admin-gallery-badges">
+              <span class="status-badge ${statusClass}">${photo.status}</span>
+              ${isFeatured ? '<span class="admin-gallery-badge featured">★ Featured</span>' : ''}
+              ${photo.category ? `<span class="admin-gallery-badge category">${esc(photo.category)}</span>` : ''}
+            </div>
+            <button type="button" class="admin-gallery-zoom-btn" data-index="${index}" title="Preview in Lightbox">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              <span>Preview HD</span>
+            </button>
+          </div>
+          <div class="admin-gallery-body">
+            <div class="admin-gallery-title" title="${esc(photo.title)}">${esc(photo.title)}</div>
+            <div class="admin-gallery-meta">
               ${dateStr ? `<span>${dateStr}</span>` : ''}
               ${photo.location ? `<span>• ${esc(photo.location)}</span>` : ''}
             </div>
-            ${photo.caption ? `<div class="gallery-card-caption">${esc(photo.caption)}</div>` : '<div class="gallery-card-caption" style="color:var(--text-tertiary);font-style:italic">No caption</div>'}
+            ${photo.caption ? `<div class="admin-gallery-caption">${esc(photo.caption)}</div>` : '<div class="admin-gallery-caption" style="color:var(--text-tertiary);font-style:italic">No caption</div>'}
             ${tagsList ? `<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Tags: ${esc(tagsList)}</div>` : ''}
-            <div class="gallery-card-actions">
+            <div class="admin-gallery-actions">
               <button type="button" class="gallery-action-edit" data-id="${photo._id}">Edit</button>
               <button type="button" class="gallery-action-toggle" data-id="${photo._id}" data-status="${photo.status}">
                 ${photo.status === 'published' ? 'Unpublish' : 'Publish'}
@@ -736,6 +821,22 @@
     }).join('');
 
     // Attach Action Listeners
+    $$('.admin-gallery-thumb, .admin-gallery-zoom-btn').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.admin-gallery-select-wrap')) return;
+        const idx = parseInt(el.dataset.index, 10);
+        if (!isNaN(idx)) openAdminLightbox(idx);
+      });
+    });
+
+    $$('.admin-gallery-check').forEach(chk => {
+      chk.addEventListener('change', (e) => {
+        const card = e.target.closest('.admin-gallery-card');
+        if (card) card.classList.toggle('selected', e.target.checked);
+        updateGalleryBulkBar();
+      });
+    });
+
     $$('.gallery-action-edit').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.id;
@@ -771,6 +872,8 @@
         deleteGalleryPhoto(id);
       });
     });
+
+    updateGalleryBulkBar();
   }
 
   function openGalleryUploadForm(photoToEdit = null) {
@@ -835,6 +938,58 @@
     if (submitBtn) submitBtn.textContent = 'Save Photo to Database';
   }
 
+  // Client-side automatic image compression using HTML5 Canvas
+  async function compressImageWithCanvas(file, maxWidth = 2048, maxHeight = 2048, quality = 0.85) {
+    if (!file || !file.type.startsWith('image/')) return file;
+    // Don't re-compress animated GIFs or SVGs
+    if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Use PNG if smaller transparent PNG, otherwise JPEG for optimal web compression
+          const isSmallPng = file.type === 'image/png' && file.size < 500 * 1024;
+          const outputType = isSmallPng ? 'image/png' : 'image/jpeg';
+          
+          canvas.toBlob((blob) => {
+            if (!blob || blob.size >= file.size) {
+              resolve(file);
+            } else {
+              const ext = outputType === 'image/jpeg' ? '.jpg' : '.png';
+              const cleanBase = file.name.replace(/\.[^/.]+$/, '');
+              const compressedFile = new File([blob], cleanBase + ext, {
+                type: outputType,
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            }
+          }, outputType, quality);
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function uploadImageToImgBB(file) {
     if (!file) return;
 
@@ -856,14 +1011,29 @@
     const previewEmpty = $('#gallery-preview-empty');
 
     if (progressContainer) progressContainer.style.display = 'block';
-    if (progressBar) progressBar.style.width = '30%';
-    if (progressText) progressText.textContent = `Uploading ${file.name} to ImgBB...`;
+    if (progressBar) progressBar.style.width = '15%';
+    if (progressText) progressText.textContent = `Optimizing & compressing ${file.name} with Canvas...`;
+
+    let fileToUpload = file;
+    try {
+      fileToUpload = await compressImageWithCanvas(file, 2048, 2048, 0.85);
+    } catch (err) {
+      console.warn('Canvas compression error:', err);
+      fileToUpload = file;
+    }
+
+    const origKb = Math.round(file.size / 1024);
+    const compKb = Math.round(fileToUpload.size / 1024);
+    const savedMsg = fileToUpload !== file ? ` (${compKb}KB from ${origKb}KB)` : ` (${origKb}KB)`;
+
+    if (progressBar) progressBar.style.width = '45%';
+    if (progressText) progressText.textContent = `Uploading ${fileToUpload.name}${savedMsg} to ImgBB...`;
 
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('image', fileToUpload);
 
-      if (progressBar) progressBar.style.width = '60%';
+      if (progressBar) progressBar.style.width = '75%';
 
       const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
         method: 'POST',
@@ -1394,6 +1564,97 @@
     if (galleryFilterStatus) {
       galleryFilterStatus.addEventListener('change', () => loadGallery());
     }
+
+    /* Gallery Bulk Actions */
+    const gallerySelectAll = $('#gallery-select-all');
+    if (gallerySelectAll) {
+      gallerySelectAll.addEventListener('change', function() {
+        const isChecked = this.checked;
+        $$('.admin-gallery-check').forEach(c => {
+          c.checked = isChecked;
+          const card = c.closest('.admin-gallery-card');
+          if (card) card.classList.toggle('selected', isChecked);
+        });
+        updateGalleryBulkBar();
+      });
+    }
+
+    const galleryBulkApply = $('#gallery-bulk-apply');
+    if (galleryBulkApply) {
+      galleryBulkApply.addEventListener('click', async () => {
+        const action = $('#gallery-bulk-action').value;
+        if (!action) {
+          toast('Please select a bulk action', 'error');
+          return;
+        }
+        const ids = [...$$('.admin-gallery-check:checked')].map(c => c.value);
+        if (ids.length === 0) {
+          toast('No photos selected', 'error');
+          return;
+        }
+
+        if (action === 'delete') {
+          showModal(
+            'Batch Delete Photos',
+            `Are you sure you want to permanently delete ${ids.length} selected photos? This action cannot be undone.`,
+            async () => {
+              try {
+                let deletedCount = 0;
+                for (const id of ids) {
+                  try {
+                    await API.adminDeleteGalleryPhoto(id);
+                    deletedCount++;
+                  } catch (e) {
+                    console.error('Failed to delete photo ' + id, e);
+                  }
+                }
+                toast(`Successfully deleted ${deletedCount} photo${deletedCount === 1 ? '' : 's'}`, 'success');
+                await loadGallery();
+              } catch (err) {
+                toast('Batch delete failed: ' + (err.message || ''), 'error');
+              }
+            }
+          );
+        } else if (action === 'publish') {
+          for (const id of ids) {
+            try { await API.adminPublishGalleryPhoto(id); } catch(e) {}
+          }
+          toast(`Updated ${ids.length} photo${ids.length === 1 ? '' : 's'} to published`, 'success');
+          await loadGallery();
+        } else if (action === 'unpublish') {
+          for (const id of ids) {
+            try { await API.adminUnpublishGalleryPhoto(id); } catch(e) {}
+          }
+          toast(`Moved ${ids.length} photo${ids.length === 1 ? '' : 's'} to drafts`, 'success');
+          await loadGallery();
+        }
+      });
+    }
+
+    /* Admin Gallery Lightbox Event Listeners */
+    const adminLightboxClose = $('#admin-lightbox-close');
+    if (adminLightboxClose) adminLightboxClose.addEventListener('click', closeAdminLightbox);
+
+    const adminLightboxBackdrop = $('#admin-lightbox-backdrop');
+    if (adminLightboxBackdrop) adminLightboxBackdrop.addEventListener('click', closeAdminLightbox);
+
+    const adminLightboxPrev = $('#admin-lightbox-prev');
+    if (adminLightboxPrev) adminLightboxPrev.addEventListener('click', () => navAdminLightbox(-1));
+
+    const adminLightboxNext = $('#admin-lightbox-next');
+    if (adminLightboxNext) adminLightboxNext.addEventListener('click', () => navAdminLightbox(1));
+
+    document.addEventListener('keydown', (e) => {
+      const modal = $('#admin-gallery-lightbox');
+      if (!modal || modal.style.display === 'none') return;
+      if (e.key === 'Escape') {
+        closeAdminLightbox();
+      } else if (e.key === 'ArrowLeft') {
+        navAdminLightbox(-1);
+      } else if (e.key === 'ArrowRight') {
+        navAdminLightbox(1);
+      }
+    });
 
     /* Start autosave */
     startAutosave();

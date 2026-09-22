@@ -6,7 +6,9 @@
   <title>Page Not Found (404) | Chitron's Archive</title>
   <meta name="description" content="The page you're looking for doesn't exist or has been moved.">
   <meta name="robots" content="noindex, follow">
-  <link rel="stylesheet" href="./css/style.css">
+    <link rel="preload" href="/fonts/noto-serif-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/noto-sans-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.min.css">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
@@ -18,12 +20,12 @@
 <body>
   <header class="site-header">
     <div class="container">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="./" data-i18n="nav.home">Home</a>
-        <a href="./about.html" data-i18n="nav.about">About</a>
-        <a href="./writing.html" data-i18n="nav.writing">Writing</a>
-        <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
+        <a href="/" data-i18n="nav.home">Home</a>
+        <a href="/about" data-i18n="nav.about">About</a>
+        <a href="/writing" data-i18n="nav.writing">Writing</a>
+        <a href="/gallery" data-i18n="nav.gallery">Gallery</a>
       </nav>
       <div class="nav-right">
         <button class="lang-toggle" aria-label="Switch language (EN / বাংলা)" title="Switch language">
@@ -43,7 +45,7 @@
 
   <div class="mobile-nav" aria-hidden="true">
     <div class="mobile-nav-header">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="lang-toggle mobile-lang-toggle" aria-label="Switch language (EN / বাংলা)">
           <span class="lang-opt lang-en active">EN</span>
@@ -56,10 +58,10 @@
       </div>
     </div>
     <nav aria-label="Mobile navigation">
-      <a href="./" data-i18n="nav.home">Home</a>
-      <a href="./about.html" data-i18n="nav.about">About</a>
-      <a href="./writing.html" data-i18n="nav.writing">Writing</a>
-      <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
+      <a href="/" data-i18n="nav.home">Home</a>
+      <a href="/about" data-i18n="nav.about">About</a>
+      <a href="/writing" data-i18n="nav.writing">Writing</a>
+      <a href="/gallery" data-i18n="nav.gallery">Gallery</a>
     </nav>
   </div>
 
@@ -68,29 +70,29 @@
       <h1 style="font-size:48px;font-weight:700;letter-spacing:-0.03em;margin-bottom:12px;color:var(--text-tertiary)">404</h1>
       <p style="font-size:17px;color:var(--text-secondary);margin-bottom:28px" data-i18n="notFound.message">This page could not be found.</p>
       <div style="display:flex;gap:12px;justify-content:center">
-        <a href="./" class="btn btn-primary" data-i18n="notFound.home">Go Home</a>
-        <a href="./writing.html" class="btn btn-secondary" data-i18n="notFound.writing">Read Writing</a>
+        <a href="/" class="btn btn-primary" data-i18n="notFound.home">Go Home</a>
+        <a href="/writing" class="btn btn-secondary" data-i18n="notFound.writing">Read Writing</a>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="container container--narrow">
-      <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
+      <p>&copy; <span class="footer-year">2026</span> Chitron Bhattacharjee</p>
       <div class="footer-links">
-        <a href="./" data-i18n="footer.home">Home</a>
-        <a href="./about.html" data-i18n="footer.about">About</a>
-        <a href="./writing.html" data-i18n="footer.writing">Writing</a>
-        <a href="./gallery.html" data-i18n="footer.gallery">Gallery</a>
-        <a href="./feed.xml" data-i18n="footer.rss">RSS</a>
-        <a href="./sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
+        <a href="/" data-i18n="footer.home">Home</a>
+        <a href="/about" data-i18n="footer.about">About</a>
+        <a href="/writing" data-i18n="footer.writing">Writing</a>
+        <a href="/gallery" data-i18n="footer.gallery">Gallery</a>
+        <a href="/feed.xml" data-i18n="footer.rss">RSS</a>
+        <a href="/sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
       </div>
     </div>
   </footer>
 
-  <script src="./js/config.js"></script>
-  <script src="./js/api.js"></script>
-  <script src="./js/i18n.js"></script>
-  <script src="./js/main.js"></script>
+  <script src="/js/config.js" defer></script>
+  <script src="/js/api.js" defer></script>
+  <script src="/js/i18n.js" defer></script>
+  <script src="/js/main.js" defer></script>
 </body>
 </html>

@@ -3,6 +3,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const sharp = require('sharp');
+const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 
 // Optional Google GenAI SDK if key is configured
 let GoogleGenAI = null;
@@ -18,14 +19,104 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+const FONTS_DIR = path.join(__dirname, 'fonts');
+if (!fs.existsSync(FONTS_DIR)) {
+  fs.mkdirSync(FONTS_DIR, { recursive: true });
+}
+
+// Register Kalpurush font in @napi-rs/canvas for Skia/HarfBuzz Bengali conjunct shaping
+const kalpurushFontPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
+if (fs.existsSync(kalpurushFontPath)) {
+  try {
+    GlobalFonts.registerFromPath(kalpurushFontPath, 'Kalpurush');
+  } catch (err) {
+    console.warn('[EditorialService] Canvas font registration note:', err.message);
+  }
+}
+
+let cachedKalpurushBase64 = null;
+let cachedFontBoldBase64 = null;
+let cachedFontRegularBase64 = null;
+let fontconfigInitialized = false;
+
+function ensureFontconfigRegistered() {
+  if (fontconfigInitialized) return;
+  try {
+    const { execSync } = require('child_process');
+    const userFontDir = path.join(process.env.HOME || '/root', '.fonts');
+    if (!fs.existsSync(userFontDir)) {
+      fs.mkdirSync(userFontDir, { recursive: true });
+    }
+    const kalpurushSrc = path.join(FONTS_DIR, 'Kalpurush.ttf');
+    const kalpurushDest = path.join(userFontDir, 'Kalpurush.ttf');
+    if (fs.existsSync(kalpurushSrc)) {
+      if (!fs.existsSync(kalpurushDest) || fs.statSync(kalpurushDest).size !== fs.statSync(kalpurushSrc).size) {
+        fs.copyFileSync(kalpurushSrc, kalpurushDest);
+      }
+      try {
+        const sysFontDir = '/usr/local/share/fonts/kalpurush';
+        if (!fs.existsSync(sysFontDir)) fs.mkdirSync(sysFontDir, { recursive: true });
+        fs.copyFileSync(kalpurushSrc, path.join(sysFontDir, 'Kalpurush.ttf'));
+      } catch (_) {}
+
+      try {
+        execSync(`fc-cache -f ${userFontDir}`, { stdio: 'ignore' });
+      } catch (_) {}
+    }
+    fontconfigInitialized = true;
+  } catch (err) {
+    console.warn('[EditorialService] Font registration warning:', err.message);
+  }
+}
+
+// Ensure font registration immediately
+ensureFontconfigRegistered();
+
+function getKalpurushBase64() {
+  try {
+    if (!cachedKalpurushBase64) {
+      const kpPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
+      if (fs.existsSync(kpPath)) {
+        cachedKalpurushBase64 = fs.readFileSync(kpPath).toString('base64');
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading Kalpurush font:', err.message);
+  }
+  return cachedKalpurushBase64;
+}
+
+function getFontBase64() {
+  try {
+    if (!cachedFontBoldBase64) {
+      const boldPath = path.join(FONTS_DIR, 'NotoSerifBengali-Bold.ttf');
+      if (fs.existsSync(boldPath)) {
+        cachedFontBoldBase64 = fs.readFileSync(boldPath).toString('base64');
+      }
+    }
+    if (!cachedFontRegularBase64) {
+      const regPath = path.join(FONTS_DIR, 'NotoSerifBengali-Regular.ttf');
+      if (fs.existsSync(regPath)) {
+        cachedFontRegularBase64 = fs.readFileSync(regPath).toString('base64');
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading Bengali fonts for SVG:', err.message);
+  }
+  return { bold: cachedFontBoldBase64, regular: cachedFontRegularBase64, kalpurush: getKalpurushBase64() };
+}
+
 /* --- Language Detection --- */
 function detectLanguage(text) {
   if (!text) return 'en';
   // Bengali Unicode range: U+0980 to U+09FF
-  const bnRegex = /[\u0980-\u09FF]/;
   const bnMatches = (text.match(/[\u0980-\u09FF]/g) || []).length;
   const totalChars = text.replace(/\s+/g, '').length || 1;
-  return (bnMatches / totalChars > 0.1) ? 'bn' : 'en';
+  return (bnMatches / totalChars > 0.05 || bnMatches >= 2) ? 'bn' : 'en';
+}
+
+function isBengaliText(text) {
+  return /[\u0980-\u09FF]/.test(String(text || ''));
 }
 
 /* --- HTML Strip Helper --- */
@@ -409,14 +500,16 @@ async function searchStockImage(searchQuery, category = '') {
 /* =========================================================
    5. FEATURED IMAGE CREATION WITH TYPOGRAPHY OVERLAY
    ========================================================= */
-function wrapText(text, maxCharsPerLine = 32) {
-  const words = text.split(/\s+/);
+function wrapText(text, maxCharsPerLine = 28) {
+  if (!text) return [];
+  const words = String(text).trim().split(/\s+/);
   const lines = [];
   let currentLine = '';
 
   for (const word of words) {
-    if ((currentLine + ' ' + word).trim().length <= maxCharsPerLine) {
-      currentLine = (currentLine + ' ' + word).trim();
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (candidate.length <= maxCharsPerLine) {
+      currentLine = candidate;
     } else {
       if (currentLine) lines.push(currentLine);
       currentLine = word;
@@ -440,82 +533,103 @@ async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhatt
     throw new Error('Valid stock photo URL required to generate featured image');
   }
 
+  // Ensure Kalpurush font is registered in canvas
+  const kalpurushFontPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
+  if (fs.existsSync(kalpurushFontPath)) {
+    try {
+      GlobalFonts.registerFromPath(kalpurushFontPath, 'Kalpurush');
+    } catch (_) {}
+  }
+
   // 1. Download image buffer
-  const imageBuffer = await fetchBuffer(stockPhotoObj.url);
+  const rawImageBuffer = await fetchBuffer(stockPhotoObj.url);
 
   // 2. Base dimensions: standard 1200x630 (16:9 social share standard)
   const width = 1200;
   const height = 630;
 
-  // 3. Prepare Title SVG Overlay with clean typography & contrast backdrop
-  const titleLines = wrapText(title, 28);
-  const titleFontSize = titleLines.length > 2 ? 42 : 48;
-  const lineHeight = titleFontSize * 1.25;
-  const startY = Math.max(160, Math.floor((height - (titleLines.length * lineHeight)) / 2) - 10);
-
-  const titleTspans = titleLines.map((line, idx) => {
-    return `<tspan x="80" y="${startY + (idx * lineHeight)}">${escapeXml(line)}</tspan>`;
-  }).join('');
-
-  const authorY = startY + (titleLines.length * lineHeight) + 40;
-  const creditText = stockPhotoObj.photographer ? `Photo: ${stockPhotoObj.photographer} (${stockPhotoObj.provider})` : '';
-
-  // SVG Overlay definition with dark gradient & glassmorphic text box
-  const svgOverlay = `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="vignette" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#090a0f" stop-opacity="0.45"/>
-          <stop offset="50%" stop-color="#090a0f" stop-opacity="0.75"/>
-          <stop offset="100%" stop-color="#090a0f" stop-opacity="0.92"/>
-        </linearGradient>
-      </defs>
-
-      <!-- Vignette Overlay -->
-      <rect width="${width}" height="${height}" fill="url(#vignette)"/>
-
-      <!-- Editorial Accent Bar -->
-      <rect x="50" y="${startY - 10}" width="6" height="${(titleLines.length * lineHeight) + 20}" fill="#2563eb" rx="3"/>
-
-      <!-- Title Text -->
-      <text font-family="'Hind Siliguri', 'Noto Sans Bengali', 'Plus Jakarta Sans', system-ui, sans-serif"
-            font-size="${titleFontSize}px"
-            font-weight="700"
-            fill="#ffffff"
-            letter-spacing="-0.02em">
-        ${titleTspans}
-      </text>
-
-      <!-- Author Line -->
-      <text x="80" y="${authorY}"
-            font-family="'Plus Jakarta Sans', system-ui, sans-serif"
-            font-size="22px"
-            font-weight="600"
-            fill="#94a3b8"
-            letter-spacing="0.05em">
-        BY ${escapeXml(author.toUpperCase())} &#183; CHITRONS ARCHIVE
-      </text>
-
-      <!-- Source Credit Tag -->
-      <text x="${width - 40}" y="${height - 25}"
-            text-anchor="end"
-            font-family="system-ui, sans-serif"
-            font-size="13px"
-            fill="#64748b">
-        ${escapeXml(creditText)}
-      </text>
-    </svg>
-  `;
-
-  // 4. Composite image using Sharp
-  const filename = `featured-${slug}-${Date.now()}.jpg`;
-  const outputPath = path.join(UPLOADS_DIR, filename);
-
-  await sharp(imageBuffer)
+  // Resize background stock image with sharp
+  const resizedBgJpg = await sharp(rawImageBuffer)
     .resize(width, height, { fit: 'cover', position: 'center' })
-    .composite([{ input: Buffer.from(svgOverlay), top: 0, left: 0 }])
-    .jpeg({ quality: 88, progressive: true })
-    .toFile(outputPath);
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  const bgImage = await loadImage(resizedBgJpg);
+
+  // 3. Create canvas for Skia/HarfBuzz complex script rendering
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // Draw background image
+  ctx.drawImage(bgImage, 0, 0, width, height);
+
+  // Draw contrast vignette gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, height);
+  grad.addColorStop(0, 'rgba(9, 10, 15, 0.45)');
+  grad.addColorStop(0.5, 'rgba(9, 10, 15, 0.78)');
+  grad.addColorStop(1, 'rgba(9, 10, 15, 0.95)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Detect language
+  const isBengali = isBengaliText(title) || detectLanguage(title) === 'bn';
+  const isAuthorBengali = isBengaliText(author);
+
+  const titleLines = wrapText(title, isBengali ? 26 : 28);
+  const titleFontSize = titleLines.length > 2 ? 40 : 46;
+  const lineHeight = isBengali ? Math.round(titleFontSize * 1.4) : Math.round(titleFontSize * 1.25);
+  const totalTextHeight = titleLines.length * lineHeight;
+  const startY = Math.max(150, Math.floor((height - totalTextHeight) / 2));
+
+  // Editorial Accent Bar (Blue)
+  ctx.fillStyle = '#2563eb';
+  if (ctx.roundRect) {
+    ctx.roundRect(50, startY - 10, 6, totalTextHeight + 10, 3);
+    ctx.fill();
+  } else {
+    ctx.fillRect(50, startY - 10, 6, totalTextHeight + 10);
+  }
+
+  // Draw Title with Kalpurush for Bengali (HarfBuzz shapes ligatures automatically)
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `700 ${titleFontSize}px ${isBengali ? 'Kalpurush' : 'sans-serif'}`;
+  ctx.textBaseline = 'top';
+
+  titleLines.forEach((line, idx) => {
+    ctx.fillText(line, 80, startY + (idx * lineHeight));
+  });
+
+  // Draw Author / Archive Credit
+  const authorY = startY + totalTextHeight + 38;
+  const authorText = isAuthorBengali ? author : author.toUpperCase();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = `600 22px ${isAuthorBengali || isBengali ? 'Kalpurush' : 'sans-serif'}`;
+  ctx.fillText(`BY ${authorText} · CHITRONS ARCHIVE`, 80, authorY);
+
+  // Draw Photo Credit Tag
+  if (stockPhotoObj.photographer) {
+    const creditText = `Photo: ${stockPhotoObj.photographer} (${stockPhotoObj.provider})`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(creditText, width - 40, height - 25);
+  }
+
+  // 4. Save JPG and WebP files
+  const cleanSlug = String(slug || 'post')
+    .toLowerCase()
+    .replace(/[^\w\u0980-\u09FF-]/g, '')
+    .slice(0, 50);
+  const filename = `featured-${cleanSlug || 'article'}-${Date.now()}.jpg`;
+  const outputPath = path.join(UPLOADS_DIR, filename);
+  const webpPath = outputPath.replace(/\.jpg$/, '.webp');
+
+  const canvasJpgBuffer = canvas.toBuffer('image/jpeg');
+
+  await Promise.all([
+    sharp(canvasJpgBuffer).jpeg({ quality: 88, progressive: true }).toFile(outputPath),
+    sharp(canvasJpgBuffer).webp({ quality: 80 }).toFile(webpPath)
+  ]);
 
   return `/uploads/featured-images/${filename}`;
 }

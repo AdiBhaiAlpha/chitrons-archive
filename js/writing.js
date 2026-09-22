@@ -45,7 +45,7 @@
         <span class="dot" aria-hidden="true">&middot;</span>
         <span>${readText}</span>
       </div>
-      <h3><a href="./post.html?slug=${esc(p.slug)}">${esc(p.title)}</a></h3>
+      <h3><a href="/post/${encodeURIComponent(p.slug)}">${esc(p.title)}</a></h3>
       <p>${esc(p.excerpt)}</p>
       ${tags ? '<div class="post-item-tags">' + tags + '</div>' : ''}
     </article>`;
@@ -90,6 +90,7 @@
   function showAdminModal() {
     if (!adminModal) return;
     adminModal.classList.remove('hidden');
+    adminModal.style.display = 'flex';
     adminModal.setAttribute('aria-hidden', 'false');
     if (adminConfirmBtn) adminConfirmBtn.focus();
   }
@@ -97,20 +98,29 @@
   function hideAdminModal() {
     if (!adminModal) return;
     adminModal.classList.add('hidden');
+    adminModal.style.display = 'none';
     adminModal.setAttribute('aria-hidden', 'true');
     const searchInput = document.getElementById('search-input');
-    if (searchInput) searchInput.focus();
+    if (searchInput && document.activeElement !== searchInput) searchInput.focus();
   }
 
   function checkAdminTrigger(val) {
-    if (!val) return false;
+    if (!val) {
+      hideAdminModal();
+      return false;
+    }
     const clean = val.trim().toLowerCase();
     if (clean === 'admin') {
       showAdminModal();
       return true;
+    } else {
+      hideAdminModal();
+      return false;
     }
-    return false;
   }
+
+  // Ensure modal is cleanly hidden on load
+  hideAdminModal();
 
   async function loadCategories() {
     try {

@@ -22,8 +22,10 @@
   <meta name="twitter:description" content="Read this article on Chitron's Archive.">
   <meta name="twitter:image" content="https://chitron.iam.bd/favicon.png">
 
-  <link rel="stylesheet" href="./css/style.css">
-  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="./feed.xml">
+    <link rel="preload" href="/fonts/noto-serif-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/noto-sans-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.min.css">
+  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="/feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
@@ -35,12 +37,12 @@
 <body>
   <header class="site-header">
     <div class="container">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="./" data-i18n="nav.home">Home</a>
-        <a href="./about.html" data-i18n="nav.about">About</a>
-        <a href="./writing.html" class="active" data-i18n="nav.writing">Writing</a>
-        <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
+        <a href="/" data-i18n="nav.home">Home</a>
+        <a href="/about" data-i18n="nav.about">About</a>
+        <a href="/writing" class="active" data-i18n="nav.writing">Writing</a>
+        <a href="/gallery" data-i18n="nav.gallery">Gallery</a>
       </nav>
       <div class="nav-right">
         <button class="lang-toggle" aria-label="Switch language (EN / বাংলা)" title="Switch language">
@@ -60,7 +62,7 @@
 
   <div class="mobile-nav" aria-hidden="true">
     <div class="mobile-nav-header">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="lang-toggle mobile-lang-toggle" aria-label="Switch language (EN / বাংলা)">
           <span class="lang-opt lang-en active">EN</span>
@@ -73,10 +75,10 @@
       </div>
     </div>
     <nav aria-label="Mobile navigation">
-      <a href="./" data-i18n="nav.home">Home</a>
-      <a href="./about.html" data-i18n="nav.about">About</a>
-      <a href="./writing.html" class="active" data-i18n="nav.writing">Writing</a>
-      <a href="./gallery.html" data-i18n="nav.gallery">Gallery</a>
+      <a href="/" data-i18n="nav.home">Home</a>
+      <a href="/about" data-i18n="nav.about">About</a>
+      <a href="/writing" class="active" data-i18n="nav.writing">Writing</a>
+      <a href="/gallery" data-i18n="nav.gallery">Gallery</a>
     </nav>
   </div>
 
@@ -84,16 +86,16 @@
     <article>
       <div class="container container--narrow" style="padding-top:20px;">
         <nav class="breadcrumb-nav" id="article-breadcrumbs" aria-label="Breadcrumbs" style="margin-bottom:16px;font-size:13px;color:var(--text-tertiary);">
-          <a href="./" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
+          <a href="/" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
           <span style="margin:0 6px;">/</span>
-          <a href="./writing.html" style="color:var(--text-secondary);" data-i18n="bc.writing">Writing</a>
+          <a href="/writing" style="color:var(--text-secondary);" data-i18n="bc.writing">Writing</a>
           <span style="margin:0 6px;">/</span>
           <span id="breadcrumb-current-title" aria-current="page" style="color:var(--text);">Article</span>
         </nav>
       </div>
 
       <header class="article-header container container--narrow">
-        <a href="./writing.html" class="back-link">
+        <a href="/writing" class="back-link">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           <span data-i18n="post.backToWriting">Back to Writing</span>
         </a>
@@ -104,7 +106,7 @@
           <span class="dot" aria-hidden="true">&middot;</span>
           <span id="article-reading-time"></span>
           <span class="dot" aria-hidden="true">&middot;</span>
-          <a href="./about.html" style="color:var(--text-secondary)">Chitron Bhattacharjee</a>
+          <a href="/about" style="color:var(--text-secondary)">Chitron Bhattacharjee</a>
         </div>
         <h1 class="article-title" id="article-title"></h1>
         <p class="article-excerpt" id="article-excerpt"></p>
@@ -121,22 +123,22 @@
 
   <footer class="site-footer">
     <div class="container container--narrow">
-      <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
+      <p>&copy; <span class="footer-year">2026</span> Chitron Bhattacharjee</p>
       <div class="footer-links">
-        <a href="./" data-i18n="footer.home">Home</a>
-        <a href="./about.html" data-i18n="footer.about">About</a>
-        <a href="./writing.html" data-i18n="footer.writing">Writing</a>
-        <a href="./gallery.html" data-i18n="footer.gallery">Gallery</a>
-        <a href="./feed.xml" data-i18n="footer.rss">RSS</a>
-        <a href="./sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
+        <a href="/" data-i18n="footer.home">Home</a>
+        <a href="/about" data-i18n="footer.about">About</a>
+        <a href="/writing" data-i18n="footer.writing">Writing</a>
+        <a href="/gallery" data-i18n="footer.gallery">Gallery</a>
+        <a href="/feed.xml" data-i18n="footer.rss">RSS</a>
+        <a href="/sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
       </div>
     </div>
   </footer>
 
-  <script src="./js/config.js"></script>
-  <script src="./js/api.js"></script>
-  <script src="./js/i18n.js"></script>
-  <script src="./js/main.js"></script>
-  <script src="./js/post.js"></script>
+  <script src="/js/config.js" defer></script>
+  <script src="/js/api.js" defer></script>
+  <script src="/js/i18n.js" defer></script>
+  <script src="/js/main.js" defer></script>
+  <script src="/js/post.js" defer></script>
 </body>
 </html>

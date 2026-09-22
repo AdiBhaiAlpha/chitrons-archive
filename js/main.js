@@ -64,12 +64,25 @@
     }
 
     /* --- Active nav link --- */
-    const path = window.location.pathname.split('/').pop() || 'index.html';
+    const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
     document.querySelectorAll('.site-nav a, .mobile-nav a').forEach(function(a) {
-      const href = a.getAttribute('href').split('/').pop();
-      if (href === path || (path === '' && href === 'index.html')) {
+      const rawHref = a.getAttribute('href') || '';
+      const cleanHref = rawHref.split('?')[0].replace(/\/$/, '') || '/';
+      if (cleanHref === currentPath ||
+          (currentPath === '/' && (cleanHref === '/' || cleanHref === '/index.html' || cleanHref === './')) ||
+          (cleanHref === '/about' && currentPath.startsWith('/about')) ||
+          (cleanHref === '/writing' && (currentPath.startsWith('/writing') || currentPath.startsWith('/post'))) ||
+          (cleanHref === '/gallery' && currentPath.startsWith('/gallery'))) {
         a.classList.add('active');
+      } else {
+        a.classList.remove('active');
       }
+    });
+
+    /* --- Footer Year --- */
+    const currentYear = new Date().getFullYear();
+    document.querySelectorAll('.footer-year').forEach(function(el) {
+      el.textContent = currentYear;
     });
   });
 

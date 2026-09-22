@@ -6,6 +6,7 @@
   <title>Admin | Chitrons Archive</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
 </head>
 <body class="admin-body">
@@ -611,11 +612,59 @@
             </div>
           </div>
 
+          <!-- Gallery Bulk Action Bar (consistent with posts bulk-bar) -->
+          <div class="bulk-bar" id="gallery-bulk-bar" style="margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:12.5px;cursor:pointer">
+                <input type="checkbox" class="admin-checkbox" id="gallery-select-all" aria-label="Select all photos">
+                <span>Select All</span>
+              </label>
+              <span id="gallery-bulk-count" style="font-weight:600;color:var(--text)">0 selected</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="gallery-bulk-action" style="padding:4px 8px;font-size:12.5px">
+                <option value="">Bulk actions</option>
+                <option value="publish">Publish</option>
+                <option value="unpublish">Unpublish</option>
+                <option value="delete">Delete Selected</option>
+              </select>
+              <button type="button" class="btn btn-sm btn-secondary" id="gallery-bulk-apply">Apply</button>
+            </div>
+          </div>
+
           <!-- Gallery Grid Cards -->
-          <div class="gallery-admin-grid" id="gallery-grid">
+          <div class="admin-gallery-grid" id="admin-gallery-grid">
             <div class="loading" style="grid-column:1/-1;padding:40px 0;text-align:center">Loading gallery photos...</div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN GALLERY LIGHTBOX MODAL -->
+  <div id="admin-gallery-lightbox" class="admin-lightbox-modal" role="dialog" aria-modal="true" aria-label="Photo Preview" style="display:none">
+    <div class="admin-lightbox-backdrop" id="admin-lightbox-backdrop"></div>
+    <div class="admin-lightbox-container">
+      <div class="admin-lightbox-header">
+        <div class="admin-lightbox-details">
+          <h3 class="admin-lightbox-title" id="admin-lightbox-title">Photo Preview</h3>
+          <div class="admin-lightbox-meta" id="admin-lightbox-meta"></div>
+        </div>
+        <div class="admin-lightbox-tools">
+          <a id="admin-lightbox-open-link" href="#" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" title="Open original high-res image in new tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <span style="margin-left:4px">Open HD</span>
+          </a>
+          <button type="button" class="btn btn-ghost btn-sm" id="admin-lightbox-close" title="Close viewer (Esc)" aria-label="Close viewer">✕</button>
+        </div>
+      </div>
+      <div class="admin-lightbox-stage">
+        <button type="button" class="admin-lightbox-nav prev" id="admin-lightbox-prev" aria-label="Previous photo">‹</button>
+        <div class="admin-lightbox-img-wrap">
+          <img id="admin-lightbox-img" src="" alt="Full view preview">
+          <p id="admin-lightbox-caption" class="admin-lightbox-caption"></p>
+        </div>
+        <button type="button" class="admin-lightbox-nav next" id="admin-lightbox-next" aria-label="Next photo">›</button>
       </div>
     </div>
   </div>

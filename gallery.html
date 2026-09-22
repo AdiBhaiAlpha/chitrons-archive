@@ -3,65 +3,79 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photo Gallery | Chitron's Archive</title>
-  <meta name="description" content="Visual moments, captures, workspaces, and photographic memories from Chitron Bhattacharjee.">
-  <link rel="canonical" href="https://chitron.iam.bd/gallery.html">
+  <title>Photo Gallery — Visual Moments &amp; Captures | Chitron's Archive</title>
+  <meta name="description" content="Visual moments, workspace captures, nature photography, and creative memories by Chitron Bhattacharjee.">
+  <link rel="canonical" href="https://chitron.iam.bd/gallery">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="Chitron Bhattacharjee">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Photo Gallery | Chitron's Archive">
-  <meta property="og:description" content="Visual moments, captures, workspaces, and photographic memories from Chitron Bhattacharjee.">
-  <meta property="og:url" content="https://chitron.iam.bd/gallery.html">
+  <meta property="og:title" content="Photo Gallery — Visual Moments &amp; Captures | Chitron's Archive">
+  <meta property="og:description" content="Visual moments, workspace captures, nature photography, and creative memories by Chitron Bhattacharjee.">
+  <meta property="og:url" content="https://chitron.iam.bd/gallery">
   <meta property="og:site_name" content="Chitron's Archive">
   <meta property="og:locale" content="en_US">
-  <meta property="og:image" content="https://chitron.iam.bd/favicon.png">
+  <meta property="og:image" content="https://chitron.iam.bd/images/chitron-bhattacharjee-og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Photo Gallery — Chitron Bhattacharjee">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Photo Gallery | Chitron's Archive">
-  <meta name="twitter:description" content="Visual moments, captures, workspaces, and photographic memories from Chitron Bhattacharjee.">
-  <meta name="twitter:image" content="https://chitron.iam.bd/favicon.png">
+  <meta name="twitter:title" content="Photo Gallery — Visual Moments &amp; Captures | Chitron's Archive">
+  <meta name="twitter:description" content="Visual moments, workspace captures, nature photography, and creative memories by Chitron Bhattacharjee.">
+  <meta name="twitter:image" content="https://chitron.iam.bd/images/chitron-bhattacharjee-og.jpg">
 
   <!-- JSON-LD Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "ImageGallery",
-    "name": "Photo Gallery | Chitron's Archive",
-    "description": "Visual moments, captures, workspaces, and photographic memories from Chitron Bhattacharjee.",
-    "url": "https://chitron.iam.bd/gallery.html",
-    "author": {
-      "@type": "Person",
-      "name": "Chitron Bhattacharjee",
-      "url": "https://chitron.iam.bd/about.html"
-    }
-  }
-  </script>
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": [
+    "@graph": [
       {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://chitron.iam.bd/"
+        "@type": "ImageGallery",
+        "@id": "https://chitron.iam.bd/gallery#gallery",
+        "name": "Photo Gallery — Visual Moments & Captures | Chitron's Archive",
+        "description": "Visual moments, captures, workspaces, and photographic memories from Chitron Bhattacharjee.",
+        "url": "https://chitron.iam.bd/gallery",
+        "author": {
+          "@type": "Person",
+          "@id": "https://chitron.iam.bd/#chitron-bhattacharjee",
+          "name": "Chitron Bhattacharjee",
+          "url": "https://chitron.iam.bd/about"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://chitron.iam.bd/#website",
+          "name": "Chitron's Archive",
+          "url": "https://chitron.iam.bd/"
+        }
       },
       {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "Gallery",
-        "item": "https://chitron.iam.bd/gallery.html"
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://chitron.iam.bd/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Gallery",
+            "item": "https://chitron.iam.bd/gallery"
+          }
+        ]
       }
     ]
   }
   </script>
 
-  <link rel="stylesheet" href="./css/style.css">
-  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="./feed.xml">
+  <link rel="preload" href="/fonts/noto-serif-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/noto-sans-bengali-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.min.css">
+  <link rel="alternate" type="application/rss+xml" title="Chitron's Archive RSS Feed" href="/feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
@@ -74,12 +88,12 @@
   <!-- HEADER -->
   <header class="site-header">
     <div class="container">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="./" data-i18n="nav.home">Home</a>
-        <a href="./about.html" data-i18n="nav.about">About</a>
-        <a href="./writing.html" data-i18n="nav.writing">Writing</a>
-        <a href="./gallery.html" class="active" data-i18n="nav.gallery">Gallery</a>
+        <a href="/" data-i18n="nav.home">Home</a>
+        <a href="/about" data-i18n="nav.about">About</a>
+        <a href="/writing" data-i18n="nav.writing">Writing</a>
+        <a href="/gallery" class="active" data-i18n="nav.gallery">Gallery</a>
       </nav>
       <div class="nav-right">
         <button class="lang-toggle" aria-label="Switch language (EN / বাংলা)" title="Switch language">
@@ -100,7 +114,7 @@
   <!-- MOBILE NAVIGATION -->
   <div class="mobile-nav" aria-hidden="true">
     <div class="mobile-nav-header">
-      <a href="./" class="site-logo">Chitron's Archive</a>
+      <a href="/" class="site-logo">Chitron's Archive</a>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="lang-toggle mobile-lang-toggle" aria-label="Switch language (EN / বাংলা)">
           <span class="lang-opt lang-en active">EN</span>
@@ -113,10 +127,10 @@
       </div>
     </div>
     <nav aria-label="Mobile navigation">
-      <a href="./" data-i18n="nav.home">Home</a>
-      <a href="./about.html" data-i18n="nav.about">About</a>
-      <a href="./writing.html" data-i18n="nav.writing">Writing</a>
-      <a href="./gallery.html" class="active" data-i18n="nav.gallery">Gallery</a>
+      <a href="/" data-i18n="nav.home">Home</a>
+      <a href="/about" data-i18n="nav.about">About</a>
+      <a href="/writing" data-i18n="nav.writing">Writing</a>
+      <a href="/gallery" class="active" data-i18n="nav.gallery">Gallery</a>
     </nav>
   </div>
 
@@ -124,7 +138,7 @@
   <main class="gallery-page">
     <div class="container container--wide">
       <nav class="breadcrumb-nav" aria-label="Breadcrumbs" style="margin-bottom:16px;font-size:13px;color:var(--text-tertiary);">
-        <a href="./" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
+        <a href="/" style="color:var(--text-secondary);" data-i18n="bc.home">Home</a>
         <span style="margin:0 6px;">/</span>
         <span aria-current="page" style="color:var(--text);" data-i18n="bc.gallery">Gallery</span>
       </nav>
@@ -141,8 +155,8 @@
         </div>
       </header>
 
-      <!-- Photo Gallery Masonry Grid -->
-      <section id="gallery-grid" class="gallery-photos-masonry" aria-live="polite">
+      <!-- Photo Gallery Grid -->
+      <section id="gallery-grid" class="gallery-photos-grid" aria-live="polite">
         <div class="loading" style="grid-column:1/-1;text-align:center;padding:48px 0;" data-i18n="gallery.loading">Loading photos...</div>
       </section>
     </div>
@@ -193,22 +207,22 @@
   <!-- FOOTER -->
   <footer class="site-footer">
     <div class="container container--wide">
-      <p>&copy; <script>document.write(new Date().getFullYear())</script> Chitron Bhattacharjee</p>
+      <p>&copy; <span class="footer-year">2026</span> Chitron Bhattacharjee</p>
       <div class="footer-links">
-        <a href="./" data-i18n="footer.home">Home</a>
-        <a href="./about.html" data-i18n="footer.about">About</a>
-        <a href="./writing.html" data-i18n="footer.writing">Writing</a>
-        <a href="./gallery.html" data-i18n="footer.gallery">Gallery</a>
-        <a href="./feed.xml" data-i18n="footer.rss">RSS</a>
-        <a href="./sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
+        <a href="/" data-i18n="footer.home">Home</a>
+        <a href="/about" data-i18n="footer.about">About</a>
+        <a href="/writing" data-i18n="footer.writing">Writing</a>
+        <a href="/gallery" data-i18n="footer.gallery">Gallery</a>
+        <a href="/feed.xml" data-i18n="footer.rss">RSS</a>
+        <a href="/sitemap.xml" data-i18n="footer.sitemap">Sitemap</a>
       </div>
     </div>
   </footer>
 
-  <script src="./js/config.js"></script>
-  <script src="./js/api.js"></script>
-  <script src="./js/i18n.js"></script>
-  <script src="./js/main.js"></script>
-  <script src="./js/gallery.js"></script>
+  <script src="/js/config.js" defer></script>
+  <script src="/js/api.js" defer></script>
+  <script src="/js/i18n.js" defer></script>
+  <script src="/js/main.js" defer></script>
+  <script src="/js/gallery.js" defer></script>
 </body>
 </html>

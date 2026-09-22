@@ -305,42 +305,50 @@
 
   function translateDom(lang) {
     // Attributes with data-i18n
-    document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var i18nElements = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < i18nElements.length; i++) {
+      var el = i18nElements[i];
       var key = el.getAttribute('data-i18n');
       var val = t(key, lang);
-      if (typeof val === 'string') {
+      if (typeof val === 'string' && el.textContent !== val) {
         el.textContent = val;
       }
-    });
+    }
 
     // Attributes with data-i18n-html
-    document.querySelectorAll('[data-i18n-html]').forEach(function(el) {
-      var key = el.getAttribute('data-i18n-html');
-      var val = t(key, lang);
-      if (typeof val === 'string') {
-        el.innerHTML = val;
+    var htmlElements = document.querySelectorAll('[data-i18n-html]');
+    for (var j = 0; j < htmlElements.length; j++) {
+      var elHtml = htmlElements[j];
+      var keyHtml = elHtml.getAttribute('data-i18n-html');
+      var valHtml = t(keyHtml, lang);
+      if (typeof valHtml === 'string' && elHtml.innerHTML !== valHtml) {
+        elHtml.innerHTML = valHtml;
       }
-    });
+    }
 
     // Attributes with data-i18n-placeholder
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
-      var key = el.getAttribute('data-i18n-placeholder');
-      var val = t(key, lang);
-      if (typeof val === 'string') {
-        el.setAttribute('placeholder', val);
+    var phElements = document.querySelectorAll('[data-i18n-placeholder]');
+    for (var k = 0; k < phElements.length; k++) {
+      var elPh = phElements[k];
+      var keyPh = elPh.getAttribute('data-i18n-placeholder');
+      var valPh = t(keyPh, lang);
+      if (typeof valPh === 'string' && elPh.getAttribute('placeholder') !== valPh) {
+        elPh.setAttribute('placeholder', valPh);
       }
-    });
+    }
 
     // Attributes with data-i18n-aria
-    document.querySelectorAll('[data-i18n-aria]').forEach(function(el) {
-      var key = el.getAttribute('data-i18n-aria');
-      var val = t(key, lang);
-      if (typeof val === 'string') {
-        el.setAttribute('aria-label', val);
+    var ariaElements = document.querySelectorAll('[data-i18n-aria]');
+    for (var m = 0; m < ariaElements.length; m++) {
+      var elAria = ariaElements[m];
+      var keyAria = elAria.getAttribute('data-i18n-aria');
+      var valAria = t(keyAria, lang);
+      if (typeof valAria === 'string' && elAria.getAttribute('aria-label') !== valAria) {
+        elAria.setAttribute('aria-label', valAria);
       }
-    });
+    }
 
-    // Translate dynamic About lists if on about page
+    // Translate dynamic About lists only if on about page
     var rolesList = document.getElementById('about-roles');
     if (rolesList) {
       var roles = t('about.roles', lang);
@@ -403,7 +411,11 @@
     document.documentElement.setAttribute('data-lang', lang);
     document.documentElement.setAttribute('lang', lang);
     updateToggleButtons(lang);
-    translateDom(lang);
+
+    // Initial HTML is already in English; avoid redundant DOM writes if lang === 'en'
+    if (lang === 'bn') {
+      translateDom('bn');
+    }
 
     document.addEventListener('click', function(e) {
       var btn = e.target.closest('.lang-toggle');

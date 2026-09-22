@@ -1,5 +1,5 @@
 /* =========================================================
-   Chitrons Archive — Home Page (Dynamic)
+   Chitrons Archive — Home Page (Optimized for Lighthouse 95+)
    ========================================================= */
 
 (function() {
@@ -11,12 +11,12 @@
     return d.innerHTML;
   }
 
-  function skeleton(n) {
-    var h = '';
-    for (var i = 0; i < n; i++) {
-      h += '<div class="post-item"><div class="skeleton skeleton-line--title"></div><div class="skeleton skeleton-line" style="width:80%"></div><div class="skeleton skeleton-line--short"></div></div>';
+  function getOptimizedImageUrl(url, width) {
+    if (!url) return '';
+    if (url.startsWith('/uploads/') || url.startsWith('http://') || url.startsWith('https://')) {
+      return '/api/images/optimize?url=' + encodeURIComponent(url) + '&w=' + width;
     }
-    return h;
+    return url;
   }
 
   var cachedPosts = [];
@@ -26,13 +26,35 @@
     return String(str).replace(/[0-9]/g, function(d) { return bnDigits[+d]; });
   }
 
-  function renderPost(p) {
+  function renderPost(p, index) {
     var isBn = window.i18n && window.i18n.getLang() === 'bn';
     var d = p.publishedAt ? new Date(p.publishedAt) : new Date();
     var date = d.toLocaleDateString(isBn ? 'bn-BD' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     var readMins = p.readingTime || 1;
     var readText = isBn ? toBnDigits(readMins) + ' মিনিট পড়ার সময়' : readMins + ' min read';
-    var coverHtml = p.coverImage ? '<img src="' + esc(p.coverImage) + '" alt="' + esc(p.title) + '" class="post-item-cover" loading="lazy">' : '';
+
+    var coverHtml = '';
+    if (p.coverImage) {
+      var isLcp = (index === 0);
+      var src480 = getOptimizedImageUrl(p.coverImage, 480);
+      var src768 = getOptimizedImageUrl(p.coverImage, 768);
+      var src1200 = getOptimizedImageUrl(p.coverImage, 1200);
+      var srcset = src480 + ' 480w, ' + src768 + ' 768w, ' + src1200 + ' 1200w';
+      var sizes = '(max-width: 768px) 100vw, 658px';
+
+      var extraAttrs = isLcp
+        ? 'fetchpriority="high" decoding="async"'
+        : 'loading="lazy" decoding="async"';
+
+      coverHtml = '<img src="' + esc(src768) + '" ' +
+        'srcset="' + esc(srcset) + '" ' +
+        'sizes="' + esc(sizes) + '" ' +
+        'alt="' + esc(p.title) + '" ' +
+        'width="658" height="345" ' +
+        'class="post-item-cover" ' +
+        extraAttrs + '>';
+    }
+
     return '<article class="post-item">' +
       coverHtml +
       '<div class="post-item-meta">' +
@@ -42,64 +64,16 @@
         '<span class="dot" aria-hidden="true">&middot;</span>' +
         '<span>' + readText + '</span>' +
       '</div>' +
-      '<h3><a href="./post.html?slug=' + esc(p.slug) + '">' + esc(p.title) + '</a></h3>' +
+      '<h3><a href="/post/' + encodeURIComponent(p.slug) + '">' + esc(p.title) + '</a></h3>' +
       '<p>' + esc(p.excerpt) + '</p>' +
     '</article>';
-  }
-
-  async function loadHomepage() {
-    try {
-      var isBn = window.i18n && window.i18n.getLang() === 'bn';
-      if (isBn) return; // let i18n handle static text
-      var data = await API.getHomepage();
-      var p = data.page;
-      if (!p) return;
-      if (p.heroTitle) document.getElementById('hero-title').textContent = p.heroTitle;
-      if (p.heroDescription) document.getElementById('hero-description').textContent = p.heroDescription;
-      if (p.primaryButtonText) document.getElementById('cta-primary').textContent = p.primaryButtonText;
-      if (p.primaryButtonLink) document.getElementById('cta-primary').href = p.primaryButtonLink;
-      if (p.secondaryButtonText) document.getElementById('cta-secondary').textContent = p.secondaryButtonText;
-      if (p.secondaryButtonLink) document.getElementById('cta-secondary').href = p.secondaryButtonLink;
-      if (p.featuredSectionTitle) document.getElementById('section-title').textContent = p.featuredSectionTitle;
-    } catch (e) {}
-  }
-
-  async function loadSettings() {
-    try {
-      var data = await API.getSettings();
-      var s = data.settings;
-      if (!s) return;
-      if (s.siteName) {
-        document.querySelectorAll('.site-logo').forEach(function(el) { el.textContent = s.siteName; });
-        document.title = s.siteName + (s.tagline ? ' — ' + s.tagline : '');
-      }
-    } catch (e) {}
-  }
-
-  async function loadPosts() {
-    var container = document.getElementById('latest-posts');
-    if (!container) return;
-    container.innerHTML = skeleton(3);
-
-    try {
-      var data = await API.getPosts({ limit: 5, sort: 'newest' });
-      cachedPosts = data.posts || [];
-      if (cachedPosts.length > 0) {
-        container.innerHTML = cachedPosts.map(renderPost).join('');
-      } else {
-        var emptyMsg = window.i18n && window.i18n.getLang() === 'bn' ? 'কোনো নিবন্ধ নেই।' : 'No articles yet.';
-        container.innerHTML = '<div class="empty-state"><p>' + emptyMsg + '</p></div>';
-      }
-    } catch (e) {
-      container.innerHTML = '<div class="empty-state"><p>Unable to load articles right now.</p></div>';
-    }
   }
 
   function renderTrendingItem(p) {
     var isBn = window.i18n && window.i18n.getLang() === 'bn';
     var readMins = p.readingTime || 1;
     var readText = isBn ? toBnDigits(readMins) + ' মিনিট' : readMins + ' min read';
-    return '<a href="./post.html?slug=' + esc(p.slug) + '" class="trending-item">' +
+    return '<a href="/post/' + encodeURIComponent(p.slug) + '" class="trending-item">' +
       '<div class="trending-item-meta">' +
         '<span class="category">' + esc(p.category) + '</span> &middot; ' +
         '<span>' + readText + '</span>' +
@@ -108,53 +82,111 @@
     '</a>';
   }
 
-  async function loadSidebars() {
+  async function loadHome() {
+    var isBn = window.i18n && window.i18n.getLang() === 'bn';
+    var postContainer = document.getElementById('latest-posts');
     var trendingContainer = document.getElementById('trending-posts');
     var catContainer = document.getElementById('sidebar-categories');
 
-    if (trendingContainer) {
-      try {
-        var data = await API.getPosts({ limit: 4, sort: 'newest' });
-        var posts = data.posts || [];
-        if (posts.length > 0) {
-          trendingContainer.innerHTML = posts.map(renderTrendingItem).join('');
+    try {
+      // Fetch consolidated home bundle in a single fast roundtrip
+      var bundle;
+      if (API.getHomeBundle) {
+        try {
+          bundle = await API.getHomeBundle();
+        } catch (e) {
+          bundle = null;
+        }
+      }
+
+      var settings = bundle ? bundle.settings : null;
+      var page = bundle ? bundle.page : null;
+      var posts = bundle ? bundle.posts : null;
+      var categories = bundle ? bundle.categories : null;
+
+      // Fallback if bundle wasn't available
+      if (!bundle) {
+        var results = await Promise.all([
+          API.getSettings().catch(function() { return { settings: null }; }),
+          API.getHomepage().catch(function() { return { page: null }; }),
+          API.getPosts({ limit: 5, sort: 'newest' }).catch(function() { return { posts: [] }; }),
+          API.getCategories().catch(function() { return { categories: [] }; })
+        ]);
+        settings = results[0].settings;
+        page = results[1].page;
+        posts = results[2].posts || [];
+        categories = results[3].categories || [];
+      }
+
+      // 1. Settings
+      if (settings && settings.siteName) {
+        document.querySelectorAll('.site-logo').forEach(function(el) { el.textContent = settings.siteName; });
+        if (settings.tagline) {
+          document.title = settings.siteName + ' — ' + settings.tagline;
+        }
+      }
+
+      // 2. Homepage Content
+      if (page && !isBn) {
+        if (page.heroTitle) document.getElementById('hero-title').textContent = page.heroTitle;
+        if (page.heroDescription) document.getElementById('hero-description').textContent = page.heroDescription;
+        if (page.primaryButtonText) document.getElementById('cta-primary').textContent = page.primaryButtonText;
+        if (page.primaryButtonLink) document.getElementById('cta-primary').href = page.primaryButtonLink;
+        if (page.secondaryButtonText) document.getElementById('cta-secondary').textContent = page.secondaryButtonText;
+        if (page.secondaryButtonLink) document.getElementById('cta-secondary').href = page.secondaryButtonLink;
+        if (page.featuredSectionTitle) document.getElementById('section-title').textContent = page.featuredSectionTitle;
+      }
+
+      // 3. Posts (Primary articles & LCP)
+      cachedPosts = posts || [];
+      if (postContainer) {
+        if (cachedPosts.length > 0) {
+          postContainer.innerHTML = cachedPosts.map(renderPost).join('');
+        } else {
+          var emptyMsg = isBn ? 'কোনো নিবন্ধ নেই।' : 'No articles yet.';
+          postContainer.innerHTML = '<div class="empty-state"><p>' + emptyMsg + '</p></div>';
+        }
+      }
+
+      // 4. Trending Posts (Reuse top posts without second network request)
+      if (trendingContainer) {
+        var trending = cachedPosts.slice(0, 4);
+        if (trending.length > 0) {
+          trendingContainer.innerHTML = trending.map(renderTrendingItem).join('');
         } else {
           trendingContainer.innerHTML = '<p class="text-muted" style="font-size:12px">No trending posts yet.</p>';
         }
-      } catch (e) {
-        trendingContainer.innerHTML = '<p class="text-muted" style="font-size:12px">Unable to load trending posts.</p>';
       }
-    }
 
-    if (catContainer) {
-      try {
-        var res = await API.getCategories();
-        var cats = res.categories || ['AI & Tech', 'Programming', 'Personal', 'Software'];
-        if (cats.length > 0) {
-          catContainer.innerHTML = cats.slice(0, 8).map(function(c) {
-            return '<a href="./writing.html?category=' + encodeURIComponent(c) + '" class="category-chip">' + esc(c) + '</a>';
-          }).join('');
-        } else {
-          catContainer.innerHTML = '<a href="./writing.html" class="category-chip">Writing</a>';
-        }
-      } catch (e) {
-        catContainer.innerHTML = '<a href="./writing.html?category=AI" class="category-chip">AI</a><a href="./writing.html?category=Programming" class="category-chip">Programming</a>';
+      // 5. Categories Cloud
+      if (catContainer) {
+        var cats = (categories && categories.length > 0)
+          ? categories
+          : ['AI & Tech', 'Programming', 'Personal', 'Software'];
+        catContainer.innerHTML = cats.slice(0, 8).map(function(c) {
+          return '<a href="/writing?category=' + encodeURIComponent(c) + '" class="category-chip">' + esc(c) + '</a>';
+        }).join('');
+      }
+
+    } catch (err) {
+      if (postContainer && !cachedPosts.length) {
+        postContainer.innerHTML = '<div class="empty-state"><p>Unable to load articles right now.</p></div>';
       }
     }
   }
 
   function init() {
-    loadSettings();
-    loadHomepage();
-    loadPosts();
-    loadSidebars();
+    loadHome();
 
     window.addEventListener('ca-lang-change', function() {
       var container = document.getElementById('latest-posts');
       if (container && cachedPosts.length > 0) {
         container.innerHTML = cachedPosts.map(renderPost).join('');
       }
-      loadSidebars();
+      var trendingContainer = document.getElementById('trending-posts');
+      if (trendingContainer && cachedPosts.length > 0) {
+        trendingContainer.innerHTML = cachedPosts.slice(0, 4).map(renderTrendingItem).join('');
+      }
     });
   }
 

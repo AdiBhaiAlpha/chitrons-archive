@@ -1,7 +1,25 @@
+# Search Engine Crawling & Indexing Rules for Chitron's Archive
 User-agent: *
 Allow: /
-Disallow: /admin/
-Disallow: /api/
+Allow: /about
+Allow: /writing
+Allow: /gallery
+Allow: /post/
+Allow: /sitemap.xml
+Allow: /feed.xml
+Allow: /uploads/
+Allow: /images/
+Allow: /css/
+Allow: /js/
 
+# Restrict admin and sensitive internal backend endpoints
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin.html
+Disallow: /api/admin/
+Disallow: /api/auth/
+
+# XML Sitemap Locations
 Sitemap: https://chitron.iam.bd/sitemap.xml
+Sitemap: https://chitronsarchive.org/sitemap.xml
 

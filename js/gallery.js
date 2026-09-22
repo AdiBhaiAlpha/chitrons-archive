@@ -34,6 +34,15 @@
     return fallback || key;
   }
 
+  // Helper to get optimized webp image url
+  function getOptimizedImageUrl(url, width) {
+    if (!url) return '';
+    if (url.startsWith('/uploads/') || url.startsWith('http://') || url.startsWith('https://')) {
+      return '/api/images/optimize?url=' + encodeURIComponent(url) + '&w=' + width;
+    }
+    return url;
+  }
+
   // Format date safely
   function formatDate(dateStr) {
     if (!dateStr) return '';
@@ -241,20 +250,21 @@
       return;
     }
 
-    var placeholderSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2"%3E%3C/svg%3E';
     var html = '';
     filteredPhotos.forEach(function(photo, index) {
       var title = photo.title || 'Untitled';
       var imageUrl = photo.imageUrl || photo.url || '';
-      var altText = photo.altText || title;
+      var altText = photo.altText || photo.alt || title;
       var caption = photo.caption || '';
       var category = photo.category || 'Photography';
       var location = photo.location || '';
-      var dateStr = formatDate(photo.dateTaken || photo.createdAt);
+      var dateStr = formatDate(photo.dateTaken || photo.date || photo.createdAt);
+
+      var thumbUrl = getOptimizedImageUrl(imageUrl, 720);
 
       html += '<article class="photo-card" data-index="' + index + '" role="button" tabindex="0" aria-label="' + escapeHtml(title) + '">';
       html += '  <div class="photo-card-media">';
-      html += '    <img src="' + placeholderSvg + '" data-src="' + escapeHtml(imageUrl) + '" alt="' + escapeHtml(altText) + '" class="photo-card-img" loading="lazy" onload="if(this.src && !this.src.startsWith(\'data:\')) this.classList.add(\'loaded\')">';
+      html += '    <img src="' + escapeHtml(thumbUrl || imageUrl) + '" alt="' + escapeHtml(altText) + '" class="photo-card-img" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.onerror=null;this.src=\'' + escapeHtml(imageUrl) + '\';this.classList.add(\'loaded\')">';
       html += '    <div class="photo-card-expand-badge" title="' + escapeHtml(translate('gallery.viewFullscreen', 'View full-screen')) + '" aria-hidden="true">';
       html += '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
       html += '    </div>';
@@ -263,6 +273,7 @@
       html += '    <div class="photo-card-header-row">';
       html += '      <span class="photo-card-category">' + escapeHtml(category) + '</span>';
       if (dateStr) {
+        html += '      <span class="photo-card-dot" aria-hidden="true">&middot;</span>';
         html += '      <time class="photo-card-date">' + escapeHtml(dateStr) + '</time>';
       }
       html += '    </div>';
@@ -286,8 +297,13 @@
 
     gridEl.innerHTML = html;
 
-    // Initialize IntersectionObserver for smooth staggered entrance animations and lazy loading
-    initLazyLoading();
+    // Check if any images are already cached and immediately mark as loaded
+    var imgs = gridEl.querySelectorAll('.photo-card-img');
+    imgs.forEach(function(img) {
+      if (img.complete && img.naturalHeight !== 0) {
+        img.classList.add('loaded');
+      }
+    });
 
     // Attach click and keyboard events to cards
     var cards = gridEl.querySelectorAll('.photo-card');
@@ -313,6 +329,15 @@
     currentLightboxIndex = index;
     isLightboxOpen = true;
 
+    var photo = filteredPhotos[currentLightboxIndex];
+    if (photo && photo._id) {
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('photo', photo._id);
+        window.history.replaceState({}, '', url);
+      } catch (e) {}
+    }
+
     updateLightboxContent();
 
     if (lightboxEl) {
@@ -326,6 +351,12 @@
   // Close Lightbox
   function closeLightbox() {
     isLightboxOpen = false;
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.delete('photo');
+      window.history.replaceState({}, '', url);
+    } catch (e) {}
+
     if (lightboxEl) {
       lightboxEl.classList.remove('active');
       lightboxEl.setAttribute('aria-hidden', 'true');
@@ -371,19 +402,29 @@
 
     var title = photo.title || 'Untitled';
     var imageUrl = photo.imageUrl || photo.url || '';
-    var altText = photo.altText || title;
+    var altText = photo.altText || photo.alt || title;
     var caption = photo.caption || '';
     var category = photo.category || '';
     var location = photo.location || '';
-    var dateStr = formatDate(photo.dateTaken || photo.createdAt);
+    var dateStr = formatDate(photo.dateTaken || photo.date || photo.createdAt);
 
     if (lightboxImg) {
+      var largeUrl = getOptimizedImageUrl(imageUrl, 1600);
       lightboxImg.style.opacity = '0';
-      lightboxImg.src = imageUrl;
+      lightboxImg.src = largeUrl || imageUrl;
       lightboxImg.alt = altText;
       lightboxImg.onload = function() {
         lightboxImg.style.opacity = '1';
       };
+      lightboxImg.onerror = function() {
+        if (lightboxImg.src !== imageUrl) {
+          lightboxImg.src = imageUrl;
+        }
+        lightboxImg.style.opacity = '1';
+      };
+      if (lightboxImg.complete && lightboxImg.naturalHeight !== 0) {
+        lightboxImg.style.opacity = '1';
+      }
     }
 
     if (lightboxTitle) {
@@ -423,14 +464,15 @@
     var nextIdx = (currentLightboxIndex + 1) % filteredPhotos.length;
     var prevIdx = (currentLightboxIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
 
-    if (filteredPhotos[nextIdx] && (filteredPhotos[nextIdx].imageUrl || filteredPhotos[nextIdx].url)) {
-      var imgNext = new Image();
-      imgNext.src = filteredPhotos[nextIdx].imageUrl || filteredPhotos[nextIdx].url;
-    }
-    if (filteredPhotos[prevIdx] && (filteredPhotos[prevIdx].imageUrl || filteredPhotos[prevIdx].url)) {
-      var imgPrev = new Image();
-      imgPrev.src = filteredPhotos[prevIdx].imageUrl || filteredPhotos[prevIdx].url;
-    }
+    [nextIdx, prevIdx].forEach(function(idx) {
+      var p = filteredPhotos[idx];
+      if (p && (p.imageUrl || p.url)) {
+        var rawUrl = p.imageUrl || p.url;
+        var optUrl = getOptimizedImageUrl(rawUrl, 1600);
+        var img = new Image();
+        img.src = optUrl || rawUrl;
+      }
+    });
   }
 
   // Toggle Fullscreen

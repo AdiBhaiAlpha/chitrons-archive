@@ -8,6 +8,8 @@ const mongoose = require('mongoose');
 const slugify = require('slugify');
 const crypto = require('crypto');
 const multer = require('multer');
+const compression = require('compression');
+const sharp = require('sharp');
 
 require('dotenv').config();
 
@@ -39,6 +41,9 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'chitrons-archive-session-s
 const MONGODB_URI = process.env.MONGODB_URI || '';
 
 const app = express();
+
+// High-performance gzip & brotli compression for all text responses
+app.use(compression());
 
 // Trust proxy for secure cookies behind reverse proxy / Cloud Run
 app.set('trust proxy', 1);
@@ -85,7 +90,163 @@ const upload = multer({
   }
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+/* --- Image Optimization & Static Serving --- */
+const imageCacheDir = path.join(__dirname, 'uploads', 'cache');
+if (!fs.existsSync(imageCacheDir)) {
+  fs.mkdirSync(imageCacheDir, { recursive: true });
+}
+
+// Automatic WebP content negotiation for /uploads/featured-images/*.jpg
+app.use('/uploads', (req, res, next) => {
+  if (req.path.endsWith('.jpg') && req.headers.accept && req.headers.accept.includes('image/webp')) {
+    const webpPath = path.join(__dirname, 'uploads', req.path.replace(/\.jpg$/, '.webp'));
+    if (fs.existsSync(webpPath)) {
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(webpPath);
+    }
+  }
+  next();
+});
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '30d',
+  setHeaders: (res, filePath) => {
+    if (filePath.match(/\.(webp|jpg|jpeg|png|svg)$/i)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=604800');
+    }
+  }
+}));
+
+// On-the-fly and cached image optimizer (WebP, resize, responsive srcset)
+app.get('/api/images/optimize', async (req, res) => {
+  try {
+    const rawUrl = req.query.url;
+    if (!rawUrl) return res.status(400).json({ error: 'url is required' });
+    const width = Math.min(1600, Math.max(100, parseInt(req.query.w) || 768));
+    const quality = Math.min(100, Math.max(50, parseInt(req.query.q) || 80));
+
+    const cacheKey = crypto.createHash('md5').update(`${rawUrl}-${width}-${quality}`).digest('hex');
+    const cachedFilePath = path.join(imageCacheDir, `${cacheKey}.webp`);
+
+    if (fs.existsSync(cachedFilePath)) {
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return fs.createReadStream(cachedFilePath).pipe(res);
+    }
+
+    let inputBuffer;
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      const response = await fetch(rawUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://chitron.iam.bd/'
+        }
+      });
+      if (!response.ok) {
+        return res.redirect(302, rawUrl);
+      }
+      inputBuffer = Buffer.from(await response.arrayBuffer());
+    } else {
+      const localPath = path.join(__dirname, rawUrl.replace(/^\/+/, ''));
+      if (!fs.existsSync(localPath)) {
+        return res.status(404).send('Image not found');
+      }
+      inputBuffer = fs.readFileSync(localPath);
+    }
+
+    const optimized = await sharp(inputBuffer)
+      .resize(width, null, { withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer();
+
+    fs.writeFile(cachedFilePath, optimized, () => {});
+
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(optimized);
+  } catch (err) {
+    if (req.query.url) {
+      return res.redirect(302, req.query.url);
+    }
+    res.status(500).send('Image processing error');
+  }
+});
+
+/* --- In-Memory Home Bundle Cache --- */
+let homeCache = null;
+let homeCacheTime = 0;
+const HOME_CACHE_TTL = 30000; // 30s TTL
+
+function invalidateHomeCache() {
+  homeCache = null;
+  homeCacheTime = 0;
+}
+
+// Auto-invalidate cache on admin mutations
+app.use('/api/admin', (req, res, next) => {
+  if (req.method !== 'GET') {
+    invalidateHomeCache();
+  }
+  next();
+});
+
+// High-speed consolidated home endpoint: eliminates 5 sequential roundtrips
+app.get('/api/home', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (homeCache && (now - homeCacheTime) < HOME_CACHE_TTL) {
+      res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
+      return res.json(homeCache);
+    }
+
+    let settings = inMemorySettings;
+    let page = inMemoryHomepage;
+    let posts = [];
+    let categories = [];
+
+    if (await isDbConnected()) {
+      const dbDate = new Date();
+      const [dbSettings, dbPage, dbPosts, dbCats] = await Promise.all([
+        SiteSettings.findOne().lean(),
+        Homepage.findOne().lean(),
+        BlogPost.find({
+          $or: [
+            { status: 'published' },
+            { status: 'scheduled', scheduledAt: { $lte: dbDate } }
+          ]
+        }).sort({ publishedAt: -1, createdAt: -1 }).limit(5).select('-content').lean(),
+        BlogPost.distinct('category', {
+          $or: [
+            { status: 'published' },
+            { status: 'scheduled', scheduledAt: { $lte: dbDate } }
+          ]
+        })
+      ]);
+      if (dbSettings) settings = dbSettings;
+      if (dbPage) page = dbPage;
+      if (dbPosts) posts = dbPosts;
+      if (dbCats) categories = dbCats.filter(Boolean);
+    } else {
+      const curDate = new Date();
+      posts = inMemoryPosts.filter(p => {
+        if (p.status === 'published') return true;
+        if (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= curDate) return true;
+        return false;
+      }).sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt)).slice(0, 5);
+      categories = [...new Set(posts.map(p => p.category).filter(Boolean))];
+    }
+
+    homeCache = { settings, page, posts, categories };
+    homeCacheTime = now;
+
+    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
+    return res.json(homeCache);
+  } catch (err) {
+    console.error('Home bundle error:', err);
+    res.status(500).json({ error: 'Failed to load home bundle' });
+  }
+});
 
 /* --- Auth Token Management --- */
 const activeTokens = new Set();
@@ -2063,7 +2224,172 @@ app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) =>
   }
 });
 
-/* --- Dynamic Sitemap and RSS Feed Generation --- */
+/* --- Dynamic Sitemap, RSS Feed, Robots.txt and Article SEO HTML Pre-rendering --- */
+
+app.get('/robots.txt', (req, res) => {
+  const robotsPath = path.join(staticRoot, 'robots.txt');
+  if (fs.existsSync(robotsPath)) {
+    res.header('Content-Type', 'text/plain');
+    res.sendFile(robotsPath);
+  } else {
+    res.header('Content-Type', 'text/plain');
+    res.send(`User-agent: *\nAllow: /\nAllow: /about\nAllow: /writing\nAllow: /gallery\nAllow: /post/\nAllow: /sitemap.xml\nAllow: /feed.xml\nAllow: /uploads/\nAllow: /images/\n\nDisallow: /admin\nDisallow: /admin/\nDisallow: /admin.html\nDisallow: /api/admin/\nDisallow: /api/auth/\n\nSitemap: https://chitron.iam.bd/sitemap.xml\nSitemap: https://chitronsarchive.org/sitemap.xml\n`);
+  }
+});
+
+// Clean URLs with 301 canonical redirects for legacy .html extensions
+app.get('/about.html', (req, res) => res.redirect(301, '/about'));
+app.get('/writing.html', (req, res) => res.redirect(301, '/writing'));
+app.get('/gallery.html', (req, res) => res.redirect(301, '/gallery'));
+
+app.get('/about', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(staticRoot, 'about.html'));
+});
+
+app.get('/writing', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(staticRoot, 'writing.html'));
+});
+
+app.get('/gallery', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(staticRoot, 'gallery.html'));
+});
+
+async function servePostHtmlWithSeo(req, res) {
+  try {
+    const slug = req.params.slug || req.query.slug;
+    const postHtmlPath = path.join(staticRoot, 'post.html');
+
+    if (!fs.existsSync(postHtmlPath)) {
+      return res.status(404).send('Not Found');
+    }
+
+    // 301 redirect legacy query param /post.html?slug=xyz to clean /post/xyz
+    if (req.path === '/post.html' && req.query.slug) {
+      return res.redirect(301, `/post/${encodeURIComponent(req.query.slug)}`);
+    }
+
+    let html = fs.readFileSync(postHtmlPath, 'utf8');
+
+    if (!slug) {
+      return res.send(html);
+    }
+
+    let post = null;
+    if (await isDbConnected()) {
+      post = await BlogPost.findOne({ slug: slug, status: 'published' });
+    }
+    if (!post) {
+      post = inMemoryPosts.find(p => p.slug === slug && p.status === 'published');
+    }
+
+    if (post) {
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.get('host') || 'chitron.iam.bd';
+      const baseUrl = `${protocol}://${host}`;
+      const canonicalUrl = `${baseUrl}/post/${encodeURIComponent(post.slug)}`;
+
+      const authorName = post.author || 'Chitron Bhattacharjee';
+      const title = `${post.title || 'Article'} — ${authorName} | Chitron's Archive`;
+      const description = (post.excerpt || post.seoDescription || post.title || '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/"/g, '&quot;')
+        .trim();
+
+      const rawCover = post.coverImage || '';
+      const coverImage = rawCover
+        ? (rawCover.startsWith('http') ? rawCover : `${baseUrl}${rawCover}`)
+        : `${baseUrl}/images/chitron-bhattacharjee-og.jpg`;
+
+      const pubDate = (post.publishedAt || post.createdAt || new Date()).toISOString();
+      const modDate = (post.updatedAt || post.publishedAt || new Date()).toISOString();
+
+      // Dynamically inject/replace SEO elements in HTML head for search crawlers & social cards
+      html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+      html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/i, `<meta name="description" content="${description}">`);
+      html = html.replace(/<link\s+rel="canonical"\s+href=".*?"\s*\/?>/i, `<link rel="canonical" href="${canonicalUrl}">`);
+
+      html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/i, `<meta property="og:title" content="${title}">`);
+      html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/i, `<meta property="og:description" content="${description}">`);
+      html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/i, `<meta property="og:url" content="${canonicalUrl}">`);
+      html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/i, `<meta property="og:image" content="${coverImage}">`);
+
+      html = html.replace(/<meta\s+name="twitter:title"\s+content=".*?"\s*\/?>/i, `<meta name="twitter:title" content="${title}">`);
+      html = html.replace(/<meta\s+name="twitter:description"\s+content=".*?"\s*\/?>/i, `<meta name="twitter:description" content="${description}">`);
+      html = html.replace(/<meta\s+name="twitter:image"\s+content=".*?"\s*\/?>/i, `<meta name="twitter:image" content="${coverImage}">`);
+
+      // Rich Schema.org BlogPosting Structured Data with canonical entity reference
+      const jsonLd = {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "BlogPosting",
+            "@id": `${canonicalUrl}#blogposting`,
+            "headline": post.title || '',
+            "description": description,
+            "datePublished": pubDate,
+            "dateModified": modDate,
+            "mainEntityOfPage": { "@type": "WebPage", "@id": canonicalUrl },
+            "url": canonicalUrl,
+            "image": coverImage,
+            "author": {
+              "@type": "Person",
+              "@id": "https://chitron.iam.bd/#chitron-bhattacharjee",
+              "name": authorName,
+              "url": `${baseUrl}/about`
+            },
+            "publisher": {
+              "@type": "Person",
+              "@id": "https://chitron.iam.bd/#chitron-bhattacharjee",
+              "name": "Chitron Bhattacharjee",
+              "url": `${baseUrl}/`
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": `${baseUrl}/`
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Writing",
+                "item": `${baseUrl}/writing`
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": post.title || 'Article',
+                "item": canonicalUrl
+              }
+            ]
+          }
+        ]
+      };
+
+      const jsonLdScript = `\n  <script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script>`;
+      html = html.replace('</head>', `${jsonLdScript}\n</head>`);
+    }
+
+    res.send(html);
+  } catch (err) {
+    console.error('Error serving post HTML:', err);
+    res.sendFile(path.join(staticRoot, 'post.html'));
+  }
+}
+
+app.get('/post.html', servePostHtmlWithSeo);
+app.get('/post/:slug', servePostHtmlWithSeo);
+
 app.get('/sitemap.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
@@ -2083,14 +2409,14 @@ app.get('/sitemap.xml', async (req, res) => {
 
     // Static pages
     xml += `  <url>\n    <loc>${siteUrl}/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
-    xml += `  <url>\n    <loc>${siteUrl}/about.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
-    xml += `  <url>\n    <loc>${siteUrl}/writing.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
-    xml += `  <url>\n    <loc>${siteUrl}/gallery.html</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/about</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/writing</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    xml += `  <url>\n    <loc>${siteUrl}/gallery</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
 
     // Dynamic Posts
     posts.forEach(p => {
       const pDate = (p.updatedAt || p.publishedAt || new Date()).toISOString().split('T')[0];
-      xml += `  <url>\n    <loc>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</loc>\n    <lastmod>${pDate}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+      xml += `  <url>\n    <loc>${siteUrl}/post/${encodeURIComponent(p.slug)}</loc>\n    <lastmod>${pDate}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
     });
 
     xml += `</urlset>`;
@@ -2127,8 +2453,8 @@ app.get('/feed.xml', async (req, res) => {
       const title = (p.title || 'Untitled').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       xml += `    <item>\n`;
       xml += `      <title>${title}</title>\n`;
-      xml += `      <link>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</link>\n`;
-      xml += `      <guid>${siteUrl}/post.html?slug=${encodeURIComponent(p.slug)}</guid>\n`;
+      xml += `      <link>${siteUrl}/post/${encodeURIComponent(p.slug)}</link>\n`;
+      xml += `      <guid>${siteUrl}/post/${encodeURIComponent(p.slug)}</guid>\n`;
       xml += `      <pubDate>${pub}</pubDate>\n`;
       xml += `      <description>${desc}</description>\n`;
       xml += `      <author>chitronbhattacharjee@gmail.com (Chitron Bhattacharjee)</author>\n`;
@@ -2144,9 +2470,55 @@ app.get('/feed.xml', async (req, res) => {
   }
 });
 
-/* --- Static Files Serving --- */
+/* --- Static Files Serving with Optimized Caching & LCP Preload --- */
 const staticRoot = path.resolve(__dirname);
-app.use(express.static(staticRoot));
+
+// High-speed homepage handler with server-side LCP image preload injection
+app.get(['/', '/index.html'], async (req, res, next) => {
+  try {
+    let html = fs.readFileSync(path.join(staticRoot, 'index.html'), 'utf8');
+    let topCover = null;
+    if (homeCache && homeCache.posts && homeCache.posts.length > 0 && homeCache.posts[0].coverImage) {
+      topCover = homeCache.posts[0].coverImage;
+    } else if (await isDbConnected()) {
+      const topPost = await BlogPost.findOne({
+        $or: [
+          { status: 'published' },
+          { status: 'scheduled', scheduledAt: { $lte: new Date() } }
+        ]
+      }).sort({ publishedAt: -1, createdAt: -1 }).select('coverImage').lean();
+      if (topPost && topPost.coverImage) topCover = topPost.coverImage;
+    }
+
+    if (topCover) {
+      const optimizedUrl = (topCover.startsWith('/uploads/') || topCover.startsWith('http://') || topCover.startsWith('https://'))
+        ? `/api/images/optimize?url=${encodeURIComponent(topCover)}&w=768`
+        : topCover;
+      const preloadTag = `  <link rel="preload" as="image" href="${optimizedUrl}" fetchpriority="high" imagesizes="(max-width: 768px) 100vw, 658px">`;
+      html = html.replace('</head>', `${preloadTag}\n</head>`);
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    return res.send(html);
+  } catch (err) {
+    next();
+  }
+});
+
+app.use(express.static(staticRoot, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.woff2') || filePath.endsWith('.woff') || filePath.endsWith('.ttf')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (filePath.match(/\.(png|jpg|jpeg|webp|svg|ico)$/i)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=604800');
+    } else if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  }
+}));
 
 // Fallback for 404
 app.use((req, res) => {

@@ -55,6 +55,10 @@ const API = (() => {
   }
 
   return {
+    async getHomeBundle() {
+      return request('/api/home');
+    },
+
     async getPosts({ search, category, tag, sort, page, limit } = {}) {
       const p = new URLSearchParams();
       if (search) p.set('search', search);

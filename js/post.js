@@ -13,7 +13,12 @@
 
   function getSlug() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('slug');
+    if (params.get('slug')) return params.get('slug');
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    if (pathParts[0] === 'post' && pathParts[1]) {
+      return decodeURIComponent(pathParts[1]);
+    }
+    return null;
   }
 
   var cachedPost = null;
@@ -33,10 +38,10 @@
     const nextLabel = isBn ? 'পরবর্তী &rarr;' : 'Next &rarr;';
     let h = '';
     if (data.previous) {
-      h += '<a href="./post.html?slug=' + esc(data.previous.slug) + '"><span class="label">' + prevLabel + '</span>' + esc(data.previous.title) + '</a>';
+      h += '<a href="/post/' + encodeURIComponent(data.previous.slug) + '"><span class="label">' + prevLabel + '</span>' + esc(data.previous.title) + '</a>';
     }
     if (data.next) {
-      h += '<a href="./post.html?slug=' + esc(data.next.slug) + '" class="next"><span class="label">' + nextLabel + '</span>' + esc(data.next.title) + '</a>';
+      h += '<a href="/post/' + encodeURIComponent(data.next.slug) + '" class="next"><span class="label">' + nextLabel + '</span>' + esc(data.next.title) + '</a>';
     }
     el.innerHTML = h;
   }
@@ -101,7 +106,7 @@
       var siteName = "Chitron's Archive";
       var author = post.author || 'Chitron Bhattacharjee';
       var baseUrl = 'https://chitron.iam.bd';
-      var pageUrl = baseUrl + '/post.html?slug=' + encodeURIComponent(post.slug);
+      var pageUrl = baseUrl + '/post/' + encodeURIComponent(post.slug);
 
       if (window.SeoHelper) {
         SeoHelper.setTitle((post.title || 'Article') + ' — ' + author + ' | ' + siteName);
@@ -112,7 +117,7 @@
         SeoHelper.setProperty('og:type', 'article');
         SeoHelper.setProperty('og:url', pageUrl);
         SeoHelper.setProperty('og:site_name', siteName);
-        if (post.coverImage) SeoHelper.setProperty('og:image', post.coverImage);
+        if (post.coverImage) SeoHelper.setProperty('og:image', post.coverImage.startsWith('http') ? post.coverImage : (baseUrl + post.coverImage));
         SeoHelper.setProperty('article:published_time', d.toISOString());
         if (updDate) SeoHelper.setProperty('article:modified_time', updDate.toISOString());
         SeoHelper.setProperty('article:author', author);
@@ -136,22 +141,25 @@
           "mainEntityOfPage": { "@type": "WebPage", "@id": pageUrl },
           "author": {
             "@type": "Person",
-            "name": author,
-            "url": baseUrl + '/about.html'
+            "@id": "https://chitron.iam.bd/#chitron-bhattacharjee",
+            "name": "Chitron Bhattacharjee",
+            "url": baseUrl + '/about'
           },
           "publisher": {
             "@type": "Person",
-            "name": author,
+            "@id": "https://chitron.iam.bd/#chitron-bhattacharjee",
+            "name": "Chitron Bhattacharjee",
             "url": baseUrl + '/'
           },
           "isPartOf": {
             "@type": "WebSite",
+            "@id": "https://chitron.iam.bd/#website",
             "name": siteName,
             "url": baseUrl + '/'
           },
           "articleSection": post.category || undefined,
           "keywords": labels.length > 0 ? labels.join(', ') : undefined,
-          "image": post.coverImage || undefined,
+          "image": post.coverImage ? (post.coverImage.startsWith('http') ? post.coverImage : (baseUrl + post.coverImage)) : undefined,
           "url": pageUrl
         },
         {
@@ -159,7 +167,7 @@
           "@type": "BreadcrumbList",
           "itemListElement": [
             { "@type": "ListItem", "position": 1, "name": "Home", "item": baseUrl + '/' },
-            { "@type": "ListItem", "position": 2, "name": "Writing", "item": baseUrl + '/writing.html' },
+            { "@type": "ListItem", "position": 2, "name": "Writing", "item": baseUrl + '/writing' },
             { "@type": "ListItem", "position": 3, "name": post.title || 'Article', "item": pageUrl }
           ]
         }
