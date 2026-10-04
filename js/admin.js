@@ -103,6 +103,9 @@
     $('#login-view').style.display = 'none';
     $('#admin-app').style.display = 'flex';
     loadDashboard();
+    if (window.AdminChat && typeof window.AdminChat.init === 'function') {
+      window.AdminChat.init();
+    }
   }
 
   /* --- Sidebar --- */
@@ -117,9 +120,14 @@
       ? $(`.sidebar-link[data-view="${view}"][data-filter="${filter || ''}"]`)
       : $(`.sidebar-link[data-view="${view}"]`);
     if (activeLink) activeLink.classList.add('active');
-    const titles = { dashboard: 'Dashboard', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels', 'content-homepage': 'Homepage Content', 'content-about': 'About Content', 'content-settings': 'Site Settings', gallery: 'Photo Gallery' };
+    const titles = { dashboard: 'Dashboard', messages: 'Live Messenger', posts: filter ? filter.charAt(0).toUpperCase() + filter.slice(1) + ' Posts' : 'All Posts', editor: editingPostId ? 'Edit Post' : 'New Post', labels: 'Labels', 'content-homepage': 'Homepage Content', 'content-about': 'About Content', 'content-settings': 'Site Settings', gallery: 'Photo Gallery' };
     $('#topbar-title').textContent = titles[view] || view;
     if (view === 'dashboard') loadDashboard();
+    else if (view === 'messages') {
+      if (window.AdminChat && typeof window.AdminChat.onOpenView === 'function') {
+        window.AdminChat.onOpenView();
+      }
+    }
     else if (view === 'posts') loadPostsList();
     else if (view === 'labels') loadLabels();
     else if (view === 'content-homepage') loadHomepageEditor();
@@ -142,6 +150,10 @@
       $('#stat-published').textContent = data.published || 0;
       $('#stat-drafts').textContent = data.drafts || 0;
       $('#stat-scheduled').textContent = data.scheduled || 0;
+      const unreadStat = $('#stat-unread-messages');
+      if (unreadStat && typeof data.unreadMessages === 'number') {
+        unreadStat.textContent = data.unreadMessages;
+      }
     } catch (e) {
       if (e.message && e.message.toLowerCase().includes('unauthorized')) {
         showLogin();

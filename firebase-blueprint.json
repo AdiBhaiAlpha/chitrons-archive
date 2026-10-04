@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator user record granting full messaging management privileges.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified administrator email address.",
+          "minLength": 5,
+          "maxLength": 254
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin record was created."
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Persistent real-time chat thread between an anonymous website visitor and the site administrator.",
+      "type": "object",
+      "properties": {
+        "visitorId": {
+          "type": "string",
+          "description": "Unique persistent anonymous visitor identifier (e.g., visitor_<random>).",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^visitor_[a-zA-Z0-9_\\-]+$"
+        },
+        "visitorName": {
+          "type": "string",
+          "description": "Optional display name for the visitor.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "lastMessage": {
+          "type": "string",
+          "description": "Preview text of the most recent message in the conversation.",
+          "minLength": 0,
+          "maxLength": 2000
+        },
+        "lastSender": {
+          "type": "string",
+          "description": "Who sent the most recent message.",
+          "enum": ["visitor", "admin"]
+        },
+        "unreadForAdmin": {
+          "type": "integer",
+          "description": "Count of messages unread by the administrator."
+        },
+        "unreadForVisitor": {
+          "type": "integer",
+          "description": "Count of messages unread by the visitor."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current lifecycle status of the conversation.",
+          "enum": ["active", "archived", "blocked"]
+        },
+        "visitorOnline": {
+          "type": "boolean",
+          "description": "Whether the visitor currently has the site open."
+        },
+        "visitorTyping": {
+          "type": "boolean",
+          "description": "Whether the visitor is actively typing."
+        },
+        "adminTyping": {
+          "type": "boolean",
+          "description": "Whether the administrator is actively typing."
+        },
+        "pageUrl": {
+          "type": "string",
+          "description": "Last page URL visited by the visitor.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the conversation started."
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest message or activity."
+        }
+      },
+      "required": [
+        "visitorId",
+        "lastMessage",
+        "lastSender",
+        "unreadForAdmin",
+        "unreadForVisitor",
+        "status",
+        "createdAt",
+        "lastMessageAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a visitor conversation thread.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Unique identifier for the message.",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "visitorId": {
+          "type": "string",
+          "description": "Parent conversation visitorId.",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^visitor_[a-zA-Z0-9_\\-]+$"
+        },
+        "sender": {
+          "type": "string",
+          "description": "Author role of the message.",
+          "enum": ["visitor", "admin"]
+        },
+        "text": {
+          "type": "string",
+          "description": "Text body of the message.",
+          "minLength": 0,
+          "maxLength": 4000
+        },
+        "type": {
+          "type": "string",
+          "description": "Content type of the message.",
+          "enum": ["text", "image", "file"]
+        },
+        "mediaUrl": {
+          "type": "string",
+          "description": "Optional URL for attached image or file.",
+          "minLength": 0,
+          "maxLength": 1000
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Optional file name for attached media.",
+          "minLength": 0,
+          "maxLength": 255
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the recipient has read this message."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the message was created."
+        }
+      },
+      "required": [
+        "messageId",
+        "visitorId",
+        "sender",
+        "text",
+        "type",
+        "read",
+        "timestamp"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Trusted administrator registry."
+    },
+    "/conversations/{visitorId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Visitor conversation metadata documents indexed by visitorId."
+    },
+    "/conversations/{visitorId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Subcollection of chronological messages belonging to a conversation."
+    }
+  }
+}

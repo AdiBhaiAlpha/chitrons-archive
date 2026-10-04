@@ -136,7 +136,30 @@
       'notFound.heading': '404',
       'notFound.subheading': 'This page could not be found.',
       'notFound.goHome': 'Go Home',
-      'notFound.readWriting': 'Read Writing'
+      'notFound.readWriting': 'Read Writing',
+
+      // Live Chat / Messenger
+      'chat.fabLabel': 'Message Me',
+      'chat.title': 'Chitron Bhattacharjee',
+      'chat.subtitleOnline': 'Available • Replies in real-time',
+      'chat.subtitleReconnecting': 'Reconnecting to live stream...',
+      'chat.subtitleOffline': 'Offline • Messages saved persistently',
+      'chat.welcomeTitle': 'Direct Message',
+      'chat.welcomeDesc': 'Send a message anytime — no account or login needed. Your conversation stays saved on this browser so you can check back for replies later.',
+      'chat.placeholder': 'Write a message...',
+      'chat.send': 'Send',
+      'chat.visitorNameLabel': 'Your Name (Optional)',
+      'chat.visitorNamePlaceholder': 'Anonymous Visitor',
+      'chat.saveName': 'Save',
+      'chat.seen': 'Seen',
+      'chat.sent': 'Delivered',
+      'chat.sending': 'Sending...',
+      'chat.typing': 'Chitron is typing...',
+      'chat.newMessages': 'New message ↓',
+      'chat.starter1': 'Hi, I need a website or web app.',
+      'chat.starter2': 'I would like to discuss an AI project.',
+      'chat.starter3': 'Hello! Just wanted to connect.',
+      'chat.persistenceNote': 'Session ID is saved locally in this browser. Clearing browser data resets your anonymous session.'
     },
     bn: {
       // Navigation
@@ -268,7 +291,30 @@
       'notFound.heading': '৪০৪',
       'notFound.subheading': 'আপনি যে পেজটি খুঁজছেন তা খুঁজে পাওয়া যায়নি বা স্থানান্তরিত হয়েছে।',
       'notFound.goHome': 'হোমে যান',
-      'notFound.readWriting': 'লেখালেখি পড়ুন'
+      'notFound.readWriting': 'লেখালেখি পড়ুন',
+
+      // Live Chat / Messenger
+      'chat.fabLabel': 'বার্তা পাঠান',
+      'chat.title': 'চিত্রন ভট্টাচার্য',
+      'chat.subtitleOnline': 'সক্রিয় • রিয়েল-টাইম উত্তর',
+      'chat.subtitleReconnecting': 'পুনরায় সংযোগ হচ্ছে...',
+      'chat.subtitleOffline': 'অফলাইন • বার্তা সংরক্ষিত থাকবে',
+      'chat.welcomeTitle': 'সরাসরি বার্তা পাঠান',
+      'chat.welcomeDesc': 'যেকোনো সময় বার্তা পাঠান — কোনো অ্যাকাউন্ট বা লগইনের প্রয়োজন নেই। আপনার কথোপকথন এই ব্রাউজারে সংরক্ষিত থাকবে, ফলে পরে এসে উত্তর দেখতে পাবেন।',
+      'chat.placeholder': 'আপনার বার্তা লিখুন...',
+      'chat.send': 'পাঠান',
+      'chat.visitorNameLabel': 'আপনার নাম (ঐচ্ছিক)',
+      'chat.visitorNamePlaceholder': 'অতিথি ভিজিটর',
+      'chat.saveName': 'সংরক্ষণ',
+      'chat.seen': 'দেখা হয়েছে',
+      'chat.sent': 'পৌঁছেছে',
+      'chat.sending': 'পাঠানো হচ্ছে...',
+      'chat.typing': 'চিত্রন লিখছেন...',
+      'chat.newMessages': 'নতুন বার্তা ↓',
+      'chat.starter1': 'হ্যালো, আমার একটি ওয়েবসাইট প্রয়োজন।',
+      'chat.starter2': 'আমি একটি এআই প্রজেক্ট নিয়ে আলোচনা করতে চাই।',
+      'chat.starter3': 'নমস্কার! আপনার সাথে পরিচিত হতে চাই।',
+      'chat.persistenceNote': 'সেশন আইডি এই ব্রাউজারে সংরক্ষিত থাকে। ব্রাউজার ডেটা মুছলে নতুন সেশন তৈরি হবে।'
     }
   };
 

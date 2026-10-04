@@ -28,9 +28,17 @@
         shortBioEl.innerHTML = p.shortBio.split('\n').filter(Boolean).map(function(para) { return '<p>' + esc(para) + '</p>'; }).join('');
       }
 
-      if (p.profileImage) {
+      if (p.profileImage && String(p.profileImage).indexOf('ibb.co') === -1) {
         var img = document.getElementById('about-profile-image');
-        if (img) { img.src = p.profileImage; img.alt = p.imageAlt || p.name || 'Profile'; img.style.display = ''; }
+        if (img) {
+          img.onerror = function() {
+            this.onerror = null;
+            this.src = '/images/chitron-bhattacharjee.webp';
+          };
+          img.src = p.profileImage;
+          img.alt = p.imageAlt || p.name || 'Profile';
+          img.style.display = '';
+        }
       }
 
       var bioEl = document.getElementById('about-biography');

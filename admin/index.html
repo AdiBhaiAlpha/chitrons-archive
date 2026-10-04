@@ -41,6 +41,13 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             Dashboard
           </button>
+          <button class="sidebar-link" data-view="messages" id="sidebar-messages-btn" style="justify-content:space-between">
+            <span style="display:inline-flex;align-items:center;gap:10px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              Messages
+            </span>
+            <span class="admin-unread-pill" id="sidebar-unread-badge" style="display:none">0</span>
+          </button>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-section-title">Content</div>
@@ -127,10 +134,107 @@
             <div class="dash-stat"><div class="number" id="stat-published">-</div><div class="label">Published</div></div>
             <div class="dash-stat"><div class="number" id="stat-drafts">-</div><div class="label">Drafts</div></div>
             <div class="dash-stat"><div class="number" id="stat-scheduled">-</div><div class="label">Scheduled</div></div>
+            <div class="dash-stat" style="cursor:pointer" id="dash-stat-messages-card" title="Open Live Messenger"><div class="number" id="stat-unread-messages" style="color:var(--accent)">0</div><div class="label">Unread Messages</div></div>
           </div>
           <div class="dash-section">
             <h3>Recent Posts</h3>
             <div id="dash-recent" class="post-list"></div>
+          </div>
+        </div>
+
+        <!-- LIVE MESSAGES / MESSENGER VIEW -->
+        <div id="view-messages" class="admin-view" style="display:none">
+          <div class="admin-messenger-shell" id="admin-messenger-shell">
+            <!-- Left Pane: Conversations List -->
+            <div class="admin-conv-sidebar" id="admin-conv-sidebar">
+              <div class="admin-conv-header">
+                <div class="admin-conv-title-row">
+                  <h2>MESSAGES</h2>
+                  <div class="admin-conv-header-tools">
+                    <button type="button" class="btn btn-ghost btn-sm" id="admin-chat-notif-btn" title="Enable Browser Push Notifications">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="admin-chat-firebase-auth-btn" title="Sign in with Google for direct Firebase Admin sync">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </button>
+                    <a href="/app.apk" download="app.apk" class="btn btn-ghost btn-sm" title="Download Admin Messenger Android APK (app.apk)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </a>
+                    <a href="./messages.html" target="_blank" class="btn btn-ghost btn-sm" title="Open Dedicated Admin Messenger App">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                  </div>
+                </div>
+                <div class="admin-conv-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="search" id="admin-chat-search" placeholder="Search visitor ID, name, or message...">
+                </div>
+                <div class="admin-conv-filters" id="admin-conv-filters">
+                  <button type="button" class="admin-conv-filter active" data-chat-filter="all">All</button>
+                  <button type="button" class="admin-conv-filter" data-chat-filter="unread">Unread</button>
+                  <button type="button" class="admin-conv-filter" data-chat-filter="active">Active</button>
+                  <button type="button" class="admin-conv-filter" data-chat-filter="archived">Archived</button>
+                  <button type="button" class="admin-conv-filter" data-chat-filter="blocked">Blocked</button>
+                </div>
+              </div>
+              <div class="admin-conv-list" id="admin-conv-list">
+                <div class="admin-conv-empty">Loading conversations...</div>
+              </div>
+            </div>
+
+            <!-- Right Pane: Active Conversation Thread -->
+            <div class="admin-conv-main" id="admin-conv-main">
+              <div class="admin-conv-placeholder" id="admin-conv-placeholder">
+                <div class="admin-conv-placeholder-icon">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <h3>Select a visitor conversation</h3>
+                <p>Real-time messages from anonymous website visitors appear here automatically. Reply directly and conversations persist across sessions.</p>
+              </div>
+
+              <div class="admin-conv-thread-wrap" id="admin-conv-thread-wrap" style="display:none">
+                <!-- Thread Topbar -->
+                <div class="admin-thread-header">
+                  <div class="admin-thread-visitor">
+                    <button type="button" class="btn btn-ghost btn-sm admin-thread-back-btn" id="admin-thread-back-btn" aria-label="Back to list">
+                      ←
+                    </button>
+                    <div class="admin-visitor-avatar" id="admin-active-visitor-avatar">V</div>
+                    <div class="admin-visitor-info">
+                      <div class="admin-visitor-name-row">
+                        <span class="admin-visitor-name" id="admin-active-visitor-name">Visitor</span>
+                        <span class="admin-visitor-status-badge" id="admin-active-visitor-status">active</span>
+                      </div>
+                      <div class="admin-visitor-sub" id="admin-active-visitor-meta">ID: visitor_...</div>
+                    </div>
+                  </div>
+                  <div class="admin-thread-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="admin-rename-visitor-btn" title="Rename visitor">Rename</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="admin-archive-visitor-btn" title="Archive or unarchive">Archive</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="admin-block-visitor-btn" title="Block or unblock spammer">Block</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="admin-delete-visitor-btn" title="Permanently delete conversation">Delete</button>
+                  </div>
+                </div>
+
+                <!-- Messages Scroll Area -->
+                <div class="admin-thread-messages" id="admin-thread-messages"></div>
+
+                <!-- Visitor Typing Indicator -->
+                <div class="admin-thread-typing" id="admin-thread-typing" style="display:none">
+                  Visitor is typing...
+                </div>
+
+                <!-- Admin Reply Composer -->
+                <form class="admin-thread-composer" id="admin-thread-composer">
+                  <input type="file" id="admin-chat-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+                  <button type="button" class="btn btn-ghost btn-sm" id="admin-chat-attach-btn" title="Send image">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </button>
+                  <textarea id="admin-chat-reply-input" rows="1" maxlength="2000" placeholder="Write a reply... (Enter to send, Shift+Enter for new line)"></textarea>
+                  <button type="submit" class="btn btn-primary btn-sm" id="admin-chat-send-btn">Send Reply</button>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -687,6 +791,7 @@
   <script src="../js/config.js"></script>
   <script src="../js/api.js"></script>
   <script src="../js/main.js"></script>
+  <script src="../js/admin-chat.js"></script>
   <script src="../js/admin.js"></script>
 </body>
 </html>

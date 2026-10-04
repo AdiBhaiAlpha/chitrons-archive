@@ -1,0 +1,21 @@
+{
+  "name": "Chitron's Archive — Admin Messenger",
+  "short_name": "Admin Chat",
+  "description": "Dedicated real-time Admin Messenger for Chitron's Archive live visitor conversations.",
+  "start_url": "/admin/messages.html",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#1C1B18",
+  "icons": [
+    {
+      "src": "https://i.ibb.co.com/Pv931317/20251110-124406.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://i.ibb.co.com/Pv931317/20251110-124406.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

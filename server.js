@@ -1,17 +1,38 @@
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const express = require('express');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const { initializeApp, getApps, getApp } = require('firebase/app');
+const { getDatabase, ref, get, set, update, remove, push } = require('firebase/database');
+const { getAuth, signInAnonymously } = require('firebase/auth');
+
+require('dotenv').config();
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBIuJFn74hJK1LT_Shcl-Y5DMgiOArB8Ps",
+  authDomain: "shipu-ai.firebaseapp.com",
+  databaseURL: "https://shipu-ai-default-rtdb.firebaseio.com",
+  projectId: "shipu-ai",
+  storageBucket: "shipu-ai.firebasestorage.app",
+  messagingSenderId: "953122849300",
+  appId: "1:953122849300:web:f821f1a161ce7879001d01",
+  measurementId: "G-N2WMSS3MNG"
+};
+
+const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const firebaseAuth = getAuth(firebaseApp);
+const firebaseRTDB = getDatabase(firebaseApp);
+
+signInAnonymously(firebaseAuth).catch(err => console.warn('Firebase RTDB Auth notice:', err.message));
+
 const cors = require('cors');
-const mongoose = require('mongoose');
 const slugify = require('slugify');
 const crypto = require('crypto');
 const multer = require('multer');
 const compression = require('compression');
 const sharp = require('sharp');
-
-require('dotenv').config();
+const { WebSocketServer } = require('ws');
 
 const editorialService = require('./backend/editorialService');
 
@@ -205,37 +226,13 @@ app.get('/api/home', async (req, res) => {
     let posts = [];
     let categories = [];
 
-    if (await isDbConnected()) {
-      const dbDate = new Date();
-      const [dbSettings, dbPage, dbPosts, dbCats] = await Promise.all([
-        SiteSettings.findOne().lean(),
-        Homepage.findOne().lean(),
-        BlogPost.find({
-          $or: [
-            { status: 'published' },
-            { status: 'scheduled', scheduledAt: { $lte: dbDate } }
-          ]
-        }).sort({ publishedAt: -1, createdAt: -1 }).limit(5).select('-content').lean(),
-        BlogPost.distinct('category', {
-          $or: [
-            { status: 'published' },
-            { status: 'scheduled', scheduledAt: { $lte: dbDate } }
-          ]
-        })
-      ]);
-      if (dbSettings) settings = dbSettings;
-      if (dbPage) page = dbPage;
-      if (dbPosts) posts = dbPosts;
-      if (dbCats) categories = dbCats.filter(Boolean);
-    } else {
-      const curDate = new Date();
-      posts = inMemoryPosts.filter(p => {
-        if (p.status === 'published') return true;
-        if (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= curDate) return true;
-        return false;
-      }).sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt)).slice(0, 5);
-      categories = [...new Set(posts.map(p => p.category).filter(Boolean))];
-    }
+    const curDate = new Date();
+    posts = inMemoryPosts.filter(p => {
+      if (p.status === 'published') return true;
+      if (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= curDate) return true;
+      return false;
+    }).sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt)).slice(0, 5).map(({ content, ...rest }) => rest);
+    categories = [...new Set(posts.map(p => p.category).filter(Boolean))];
 
     homeCache = { settings, page, posts, categories };
     homeCacheTime = now;
@@ -263,13 +260,7 @@ function isValidToken(token) {
   return activeTokens.has(clean);
 }
 
-/* --- Mongoose Models (from backend/models) --- */
-const BlogPost = require('./backend/models/BlogPost');
-const AboutProfile = require('./backend/models/AboutProfile');
-const Homepage = require('./backend/models/Homepage');
-const SiteSettings = require('./backend/models/SiteSettings');
-const Revision = require('./backend/models/Revision');
-const GalleryItem = require('./backend/models/GalleryItem');
+/* --- Data State Definitions --- */
 
 /* --- Seed Data Definitions --- */
 const initialPosts = [
@@ -334,7 +325,7 @@ const initialAbout = {
   headline: "Hi, I’m Chitron Bhattacharjee.",
   shortBio: "I’m an AI developer, programmer, and writer from Bangladesh. I enjoy building things with technology, especially AI-powered systems, web applications, and tools that solve real problems in a simple way.\n\nI’m always interested in learning how things work behind the scenes and turning ideas into something people can actually use.",
   biography: "I work with modern web technologies and enjoy experimenting with AI, automation, and conversational systems. Most of my time goes into building projects, improving my skills, and exploring new ideas in technology.\n\nI also enjoy writing. Sometimes I write about technology, sometimes about ideas and experiences, and sometimes simply to put thoughts into words.",
-  profileImage: 'https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png',
+  profileImage: '/images/chitron-bhattacharjee.webp',
   imageAlt: 'Chitron Bhattacharjee',
   roles: [
     'Build AI-powered applications and conversational systems',
@@ -394,7 +385,7 @@ const initialSettings = {
   authorName: 'Chitron Bhattacharjee',
   authorTitle: 'AI Developer, Programmer & Writer',
   location: 'Bangladesh',
-  profileImage: '',
+  profileImage: '/images/chitron-bhattacharjee.webp',
   contactEmail: 'chitronbhattacharjee@gmail.com',
   seoTitle: "Chitron Bhattacharjee — AI Developer, Programmer & Writer | Chitron's Archive",
   seoDescription: 'Personal digital archive of Chitron Bhattacharjee — AI developer, programmer, designer and writer from Bangladesh.',
@@ -408,7 +399,7 @@ const initialGallery = [
   {
     title: 'Chitron Bhattacharjee',
     caption: 'Official portrait and digital archive identity.',
-    url: 'https://i.ibb.co.com/Z63W9Mfq/file-000000003a447207b4fb3901061137af.png',
+    url: '/images/chitron-bhattacharjee.webp',
     category: 'Portrait',
     tags: ['portrait', 'founder', 'chitron'],
     location: 'Sylhet, Bangladesh',
@@ -493,126 +484,137 @@ let inMemoryAbout = { ...initialAbout };
 let inMemoryHomepage = { ...initialHomepage };
 let inMemorySettings = { ...initialSettings };
 
-let isMongoConnected = false;
-let sessionStore = null;
-let mongoConnectPromise = null;
-
-async function isDbConnected() {
-  if (mongoose.connection.readyState === 1) {
-    return true;
+/* --- Firebase Realtime Database CRUD Helpers --- */
+async function rtdbGet(pathStr) {
+  try {
+    const snap = await get(ref(firebaseRTDB, pathStr));
+    if (snap.exists()) return snap.val();
+  } catch (err) {
+    console.warn(`RTDB Get [${pathStr}] warning:`, err.message);
   }
-  if (!MONGODB_URI) return false;
-  return await connectToMongo();
+  return null;
 }
 
-// Track connection status dynamically
-mongoose.connection.on('connected', () => {
-  isMongoConnected = true;
-  console.log('MongoDB connected successfully');
-});
-
-mongoose.connection.on('disconnected', () => {
-  isMongoConnected = false;
-  console.warn('MongoDB disconnected');
-});
-
-mongoose.connection.on('error', (err) => {
-  isMongoConnected = false;
-  console.warn('MongoDB connection event error:', err.message);
-});
-
-async function connectToMongo() {
-  if (mongoose.connection.readyState === 1) {
-    isMongoConnected = true;
-    return true;
-  }
-  if (!MONGODB_URI) return false;
-
-  if (mongoose.connection.readyState === 2 && mongoConnectPromise) {
-    await mongoConnectPromise.catch(() => {});
-    return mongoose.connection.readyState === 1;
-  }
-
+async function rtdbSet(pathStr, val) {
   try {
-    mongoose.set('bufferCommands', true);
-    mongoConnectPromise = mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000
-    });
-    await mongoConnectPromise;
-    isMongoConnected = true;
+    await set(ref(firebaseRTDB, pathStr), val);
     return true;
   } catch (err) {
-    isMongoConnected = false;
-    mongoConnectPromise = null;
-    console.warn('MongoDB connection attempt failed:', err.message);
+    console.warn(`RTDB Set [${pathStr}] warning:`, err.message);
     return false;
   }
 }
 
-async function initMongoDB() {
-  if (!MONGODB_URI) return;
-  const connected = await connectToMongo();
-  if (connected) {
-    console.log('MongoDB initialized successfully');
-    try {
-      // Auto-seed if database is empty or missing details
-      const postCount = await BlogPost.countDocuments();
-      if (postCount === 0) {
-        console.log('Seeding initial blog posts to MongoDB...');
-        for (const p of initialPosts) {
-          await BlogPost.create(p);
-        }
-      }
-
-      const existingAbout = await AboutProfile.findOne();
-      if (!existingAbout) {
-        console.log('Seeding initial About profile to MongoDB...');
-        await AboutProfile.create(initialAbout);
-      }
-
-      const existingHp = await Homepage.findOne();
-      if (!existingHp) {
-        await Homepage.create(initialHomepage);
-      }
-
-      const existingSettings = await SiteSettings.findOne();
-      if (!existingSettings) {
-        await SiteSettings.create(initialSettings);
-      }
-
-      const galleryCount = await GalleryItem.countDocuments();
-      if (galleryCount === 0) {
-        console.log('Seeding initial gallery photos to MongoDB...');
-        for (const g of initialGallery) {
-          await GalleryItem.create(g);
-        }
-      }
-
-      // Sync in-memory caches from database
-      const dbPosts = await BlogPost.find().sort({ createdAt: -1 });
-      if (dbPosts.length > 0) {
-        inMemoryPosts = dbPosts.map(p => p.toObject());
-      }
-      const dbGallery = await GalleryItem.find().sort({ order: 1, date: -1 });
-      if (dbGallery.length > 0) {
-        inMemoryGallery = dbGallery.map(g => g.toObject());
-      }
-    } catch (seedErr) {
-      console.error('Error during MongoDB seed check:', seedErr.message);
-    }
+async function rtdbUpdate(pathStr, updates) {
+  try {
+    await update(ref(firebaseRTDB, pathStr), updates);
+    return true;
+  } catch (err) {
+    console.warn(`RTDB Update [${pathStr}] warning:`, err.message);
+    return false;
   }
 }
 
-// Start DB connection
-const dbPromise = initMongoDB();
-
-// Middleware: ensure MongoDB connection is active for every request
-app.use(async (req, res, next) => {
-  if (MONGODB_URI && mongoose.connection.readyState !== 1) {
-    await connectToMongo().catch(() => {});
+async function rtdbRemove(pathStr) {
+  try {
+    await remove(ref(firebaseRTDB, pathStr));
+    return true;
+  } catch (err) {
+    console.warn(`RTDB Remove [${pathStr}] warning:`, err.message);
+    return false;
   }
-  next();
-});
+}
+
+async function initFirebaseRTDB() {
+  console.log('Initializing Firebase Realtime Database (https://shipu-ai-default-rtdb.firebaseio.com)...');
+  try {
+    // 1. Sync & Seed Posts
+    const rtdbPosts = await rtdbGet('posts');
+    if (rtdbPosts && typeof rtdbPosts === 'object') {
+      const arr = Array.isArray(rtdbPosts) ? rtdbPosts : Object.values(rtdbPosts);
+      if (arr.length > 0) {
+        inMemoryPosts = arr.filter(Boolean).map((p, i) => ({
+          ...p,
+          _id: p._id || p.id || `post-${i + 1}`,
+          createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+          updatedAt: p.updatedAt ? new Date(p.updatedAt) : new Date()
+        }));
+      } else {
+        await seedInitialPostsToRTDB();
+      }
+    } else {
+      await seedInitialPostsToRTDB();
+    }
+
+    // 2. Sync & Seed About
+    const rtdbAbout = await rtdbGet('about');
+    if (rtdbAbout && typeof rtdbAbout === 'object') {
+      inMemoryAbout = { ...initialAbout, ...rtdbAbout, profileImage: '/images/chitron-bhattacharjee.webp' };
+    } else {
+      await rtdbSet('about', initialAbout);
+    }
+
+    // 3. Sync & Seed Homepage
+    const rtdbHp = await rtdbGet('homepage');
+    if (rtdbHp && typeof rtdbHp === 'object') {
+      inMemoryHomepage = { ...initialHomepage, ...rtdbHp };
+    } else {
+      await rtdbSet('homepage', initialHomepage);
+    }
+
+    // 4. Sync & Seed Settings
+    const rtdbSettings = await rtdbGet('settings');
+    if (rtdbSettings && typeof rtdbSettings === 'object') {
+      inMemorySettings = { ...initialSettings, ...rtdbSettings, profileImage: '/images/chitron-bhattacharjee.webp' };
+    } else {
+      await rtdbSet('settings', initialSettings);
+    }
+
+    // 5. Sync & Seed Gallery
+    const rtdbGallery = await rtdbGet('gallery');
+    if (rtdbGallery && typeof rtdbGallery === 'object') {
+      const arr = Array.isArray(rtdbGallery) ? rtdbGallery : Object.values(rtdbGallery);
+      if (arr.length > 0) {
+        inMemoryGallery = arr.filter(Boolean).map((g, i) => ({
+          ...g,
+          _id: g._id || g.id || `photo-${i + 1}`,
+          date: g.date ? new Date(g.date) : new Date()
+        }));
+      } else {
+        await seedInitialGalleryToRTDB();
+      }
+    } else {
+      await seedInitialGalleryToRTDB();
+    }
+
+    console.log('Firebase Realtime Database initialized and articles migrated successfully.');
+  } catch (seedErr) {
+    console.error('Error during Firebase RTDB seed check:', seedErr.message);
+  }
+}
+
+async function seedInitialPostsToRTDB() {
+  const postsMap = {};
+  initialPosts.forEach((p, i) => {
+    const id = `post-${i + 1}`;
+    postsMap[id] = { ...p, _id: id, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  });
+  await rtdbSet('posts', postsMap);
+  inMemoryPosts = Object.values(postsMap);
+}
+
+async function seedInitialGalleryToRTDB() {
+  const galleryMap = {};
+  initialGallery.forEach((g, i) => {
+    const id = `photo-${i + 1}`;
+    galleryMap[id] = { ...g, _id: id, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  });
+  await rtdbSet('gallery', galleryMap);
+  inMemoryGallery = Object.values(galleryMap);
+}
+
+// Start Firebase RTDB Sync
+initFirebaseRTDB();
 
 /* --- Session Configuration --- */
 const sessionOptions = {
@@ -627,19 +629,6 @@ const sessionOptions = {
     path: '/'
   }
 };
-
-if (MONGODB_URI) {
-  try {
-    sessionOptions.store = MongoStore.create({
-      mongoUrl: MONGODB_URI,
-      collectionName: 'sessions',
-      ttl: 7 * 24 * 60 * 60,
-      autoRemove: 'native'
-    });
-  } catch (e) {
-    console.warn('Could not initialize MongoStore, using MemoryStore for sessions:', e.message);
-  }
-}
 
 app.use(session(sessionOptions));
 
@@ -734,55 +723,6 @@ app.get('/api/posts', async (req, res) => {
     const { search, category, tag, sort = 'newest', page = 1, limit = 10 } = req.query;
     const now = new Date();
 
-    if (await isDbConnected()) {
-      const conditions = [
-        {
-          $or: [
-            { status: 'published' },
-            { status: 'scheduled', scheduledAt: { $lte: now } }
-          ]
-        }
-      ];
-
-      if (category && category.trim()) {
-        conditions.push({ category: category.trim().toLowerCase() });
-      }
-
-      if (tag && tag.trim()) {
-        conditions.push({ labels: tag.trim().toLowerCase() });
-      }
-
-      if (search && search.trim()) {
-        const searchRegex = new RegExp(search.trim(), 'i');
-        conditions.push({
-          $or: [
-            { title: searchRegex },
-            { excerpt: searchRegex },
-            { labels: searchRegex },
-            { content: searchRegex }
-          ]
-        });
-      }
-
-      const query = conditions.length === 1 ? conditions[0] : { $and: conditions };
-
-      const sortOption = sort === 'oldest' ? { publishedAt: 1, createdAt: 1 } : { publishedAt: -1, createdAt: -1 };
-      const pNum = Math.max(1, parseInt(page) || 1);
-      const lNum = Math.max(1, parseInt(limit) || 10);
-      const skip = (pNum - 1) * lNum;
-
-      const [posts, total] = await Promise.all([
-        BlogPost.find(query).sort(sortOption).skip(skip).limit(lNum).select('-content'),
-        BlogPost.countDocuments(query)
-      ]);
-
-      return res.json({
-        posts,
-        pagination: { page: pNum, limit: lNum, total, pages: Math.ceil(total / lNum) || 1 }
-      });
-    }
-
-    // In-memory fallback
     let list = inMemoryPosts.filter(p => {
       if (p.status === 'published') return true;
       if (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now) return true;
@@ -825,10 +765,6 @@ app.get('/api/posts', async (req, res) => {
 
 app.get('/api/posts/categories', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const categories = await BlogPost.distinct('category', { status: 'published' });
-      return res.json({ categories: categories.filter(Boolean) });
-    }
     const cats = [...new Set(inMemoryPosts.filter(p => p.status === 'published').map(p => p.category).filter(Boolean))];
     res.json({ categories: cats });
   } catch (err) {
@@ -838,16 +774,6 @@ app.get('/api/posts/categories', async (req, res) => {
 
 app.get('/api/posts/labels', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const pipeline = [
-        { $match: { status: 'published' } },
-        { $unwind: '$labels' },
-        { $group: { _id: '$labels', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ];
-      const results = await BlogPost.aggregate(pipeline);
-      return res.json({ labels: results.map(r => ({ name: r._id, count: r.count })) });
-    }
     const counts = {};
     inMemoryPosts.filter(p => p.status === 'published').forEach(p => {
       (p.labels || []).forEach(l => { counts[l] = (counts[l] || 0) + 1; });
@@ -863,24 +789,6 @@ app.get('/api/posts/nav/:currentSlug', async (req, res) => {
   try {
     const { currentSlug } = req.params;
     const now = new Date();
-    const pubCondition = {
-      $or: [
-        { status: 'published' },
-        { status: 'scheduled', scheduledAt: { $lte: now } }
-      ]
-    };
-
-    if (await isDbConnected()) {
-      const current = await BlogPost.findOne({ slug: currentSlug, ...pubCondition });
-      if (!current) return res.status(404).json({ error: 'Post not found' });
-      const refDate = current.publishedAt || current.createdAt || now;
-      const [prev, nextPost] = await Promise.all([
-        BlogPost.findOne({ ...pubCondition, publishedAt: { $lt: refDate } }).sort({ publishedAt: -1, createdAt: -1 }).select('slug title'),
-        BlogPost.findOne({ ...pubCondition, publishedAt: { $gt: refDate } }).sort({ publishedAt: 1, createdAt: 1 }).select('slug title')
-      ]);
-      return res.json({ previous: prev, next: nextPost });
-    }
-
     const published = inMemoryPosts
       .filter(p => p.status === 'published' || (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now))
       .sort((a, b) => new Date(a.publishedAt || a.createdAt) - new Date(b.publishedAt || b.createdAt));
@@ -899,25 +807,12 @@ app.get('/api/posts/:slug', async (req, res) => {
     const slugParam = req.params.slug;
     const now = new Date();
 
-    if (await isDbConnected()) {
-      const post = await BlogPost.findOne({
-        slug: slugParam,
-        $or: [
-          { status: 'published' },
-          { status: 'scheduled', scheduledAt: { $lte: now } }
-        ]
-      });
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      post.viewCount = (post.viewCount || 0) + 1;
-      await post.save().catch(() => {});
-      return res.json({ post });
-    }
-
     const post = inMemoryPosts.find(p => p.slug === slugParam && (
       p.status === 'published' || (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= now)
     ));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.viewCount = (post.viewCount || 0) + 1;
+    rtdbUpdate(`posts/${post._id}`, { viewCount: post.viewCount });
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch post' });
@@ -927,11 +822,6 @@ app.get('/api/posts/:slug', async (req, res) => {
 /* --- Public Content --- */
 app.get('/api/content/settings', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let settings = await SiteSettings.findOne();
-      if (!settings) settings = await SiteSettings.create(initialSettings);
-      return res.json({ settings });
-    }
     res.json({ settings: inMemorySettings });
   } catch (err) {
     res.json({ settings: inMemorySettings });
@@ -940,11 +830,6 @@ app.get('/api/content/settings', async (req, res) => {
 
 app.get('/api/content/homepage', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let page = await Homepage.findOne();
-      if (!page) page = await Homepage.create(initialHomepage);
-      return res.json({ page });
-    }
     res.json({ page: inMemoryHomepage });
   } catch (err) {
     res.json({ page: inMemoryHomepage });
@@ -953,13 +838,6 @@ app.get('/api/content/homepage', async (req, res) => {
 
 app.get('/api/content/about', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let profile = await AboutProfile.findOne();
-      if (!profile || !profile.biography) {
-        profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
-      }
-      return res.json({ profile });
-    }
     res.json({ profile: inMemoryAbout });
   } catch (err) {
     res.json({ profile: inMemoryAbout });
@@ -977,48 +855,6 @@ app.get('/api/gallery', async (req, res) => {
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 24);
 
-    if (await isDbConnected()) {
-      const query = { status: 'published' };
-      if (category && category.toLowerCase() !== 'all') {
-        query.category = new RegExp('^' + category.trim() + '$', 'i');
-      }
-      if (search) {
-        const searchRegex = new RegExp(search.trim(), 'i');
-        query.$or = [
-          { title: searchRegex },
-          { caption: searchRegex },
-          { location: searchRegex },
-          { tags: searchRegex }
-        ];
-      }
-
-      const sortObj = sort === 'oldest' 
-        ? { date: 1, createdAt: 1 } 
-        : { featured: -1, order: 1, date: -1, createdAt: -1 };
-
-      const total = await GalleryItem.countDocuments(query);
-      const photos = await GalleryItem.find(query)
-        .sort(sortObj)
-        .skip((pNum - 1) * lNum)
-        .limit(lNum);
-
-      const rawCategories = await GalleryItem.aggregate([
-        { $match: { status: 'published' } },
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]);
-      const categories = rawCategories.map(c => ({ name: c._id || 'General', count: c.count }));
-
-      return res.json({
-        photos,
-        total,
-        page: pNum,
-        totalPages: Math.ceil(total / lNum) || 1,
-        categories
-      });
-    }
-
-    // In-memory fallback
     let list = inMemoryGallery.filter(item => item.status === 'published');
     if (category && category.toLowerCase() !== 'all') {
       const catLower = category.trim().toLowerCase();
@@ -1069,14 +905,6 @@ app.get('/api/gallery', async (req, res) => {
 
 app.get('/api/gallery/categories', async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const raw = await GalleryItem.aggregate([
-        { $match: { status: 'published' } },
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]);
-      return res.json({ categories: raw.map(c => ({ name: c._id || 'General', count: c.count })) });
-    }
     const catMap = {};
     inMemoryGallery.filter(item => item.status === 'published').forEach(item => {
       const c = item.category || 'General';
@@ -1091,12 +919,7 @@ app.get('/api/gallery/categories', async (req, res) => {
 app.get('/api/gallery/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (await isDbConnected()) {
-      const photo = await GalleryItem.findById(id);
-      if (!photo) return res.status(404).json({ error: 'Photo not found' });
-      return res.json({ photo });
-    }
-    const photo = inMemoryGallery.find(item => item._id === id);
+    const photo = inMemoryGallery.find(item => String(item._id) === String(id));
     if (!photo) return res.status(404).json({ error: 'Photo not found' });
     res.json({ photo });
   } catch (err) {
@@ -1108,22 +931,14 @@ app.get('/api/gallery/:id', async (req, res) => {
 app.get('/api/admin/stats', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
-    if (await isDbConnected()) {
-      const [total, published, drafts, scheduled, totalPhotos] = await Promise.all([
-        BlogPost.countDocuments({ status: { $ne: 'trashed' } }),
-        BlogPost.countDocuments({ status: 'published' }),
-        BlogPost.countDocuments({ status: 'draft' }),
-        BlogPost.countDocuments({ status: 'scheduled', scheduledAt: { $gt: now } }),
-        GalleryItem.countDocuments()
-      ]);
-      return res.json({ total, published, drafts, scheduled, totalPhotos });
-    }
     const total = inMemoryPosts.filter(p => p.status !== 'trashed').length;
     const published = inMemoryPosts.filter(p => p.status === 'published').length;
     const drafts = inMemoryPosts.filter(p => p.status === 'draft').length;
     const scheduled = inMemoryPosts.filter(p => p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) > now).length;
     const totalPhotos = inMemoryGallery.length;
-    res.json({ total, published, drafts, scheduled, totalPhotos });
+    const memConvs = Array.from(inMemoryConversations.values()).filter(c => (Array.isArray(c.messages) && c.messages.length > 0) || c.lastMessage);
+    const unreadMessages = memConvs.reduce((sum, c) => sum + (Number(c.unreadForAdmin) || 0), 0);
+    res.json({ total, published, drafts, scheduled, totalPhotos, unreadMessages, totalConversations: memConvs.length });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
@@ -1134,31 +949,6 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
     const { search, status, page = 1, limit = 20 } = req.query;
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 20);
-
-    if (await isDbConnected()) {
-      const query = {};
-      if (status && status !== '') query.status = status;
-      else query.status = { $ne: 'trashed' };
-
-      if (search) {
-        query.$or = [
-          { title: { $regex: search, $options: 'i' } },
-          { excerpt: { $regex: search, $options: 'i' } },
-          { content: { $regex: search, $options: 'i' } }
-        ];
-      }
-
-      const skip = (pNum - 1) * lNum;
-      const [posts, total] = await Promise.all([
-        BlogPost.find(query).sort({ updatedAt: -1, createdAt: -1 }).skip(skip).limit(lNum),
-        BlogPost.countDocuments(query)
-      ]);
-
-      return res.json({
-        posts,
-        pagination: { page: pNum, limit: lNum, total, pages: Math.ceil(total / lNum) || 1 }
-      });
-    }
 
     let list = [...inMemoryPosts];
     if (status && status !== '') list = list.filter(p => p.status === status);
@@ -1188,12 +978,7 @@ app.get('/api/admin/posts', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      return res.json({ post });
-    }
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     res.json({ post });
   } catch (err) {
@@ -1326,10 +1111,7 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
       finalPublishedAt = now;
     }
 
-    if (await isDbConnected()) {
-      // Check duplicate slug
-      const existing = await BlogPost.findOne({ slug: postSlug });
-      if (existing) {
+      if (inMemoryPosts.some(p => p.slug === postSlug)) {
         postSlug = `${postSlug}-${Date.now().toString(36)}`;
         enriched.slug = postSlug;
       }
@@ -1352,55 +1134,24 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
         canonicalUrl: (canonicalUrl || '').trim(),
         featured: !!featured,
         commentsEnabled: commentsEnabled !== false,
-        editorialAutomation: enriched.editorialAutomation
+        editorialAutomation: enriched.editorialAutomation,
+        _id: `post-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
       };
 
-      const post = new BlogPost(postData);
-      await post.save();
+      if (inMemoryPosts.some(p => p.slug === postSlug)) {
+        postData.slug = `${postSlug}-${Date.now().toString(36)}`;
+      }
 
-      // Sync to in-memory fallback
-      const plainPost = post.toObject();
-      inMemoryPosts.unshift(plainPost);
+      inMemoryPosts.unshift(postData);
+      rtdbSet(`posts/${postData._id}`, postData);
 
-      return res.status(201).json({ post });
+      return res.status(201).json({ post: postData });
+    } catch (err) {
+      console.error('CRITICAL Error in POST /api/admin/posts:', err);
+      res.status(500).json({ error: err.message || 'Failed to create post' });
     }
-
-    // In-memory fallback
-    if (inMemoryPosts.some(p => p.slug === postSlug)) {
-      postSlug = `${postSlug}-${Date.now().toString(36)}`;
-    }
-
-    const newPost = {
-      _id: `post-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      title: enriched.title,
-      slug: postSlug,
-      excerpt: enriched.excerpt,
-      content: enriched.content,
-      coverImage: enriched.coverImage,
-      author: enriched.author,
-      category: enriched.category,
-      labels: enriched.labels,
-      status: postStatus,
-      publishedAt: finalPublishedAt,
-      scheduledAt: finalScheduledAt,
-      readingTime: calcReadingTime(enriched.content),
-      viewCount: 0,
-      seoTitle: (seoTitle || '').trim(),
-      seoDescription: (seoDescription || '').trim(),
-      canonicalUrl: (canonicalUrl || '').trim(),
-      featured: !!featured,
-      commentsEnabled: commentsEnabled !== false,
-      editorialAutomation: enriched.editorialAutomation,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    inMemoryPosts.unshift(newPost);
-    res.status(201).json({ post: newPost });
-  } catch (err) {
-    console.error('CRITICAL Error in POST /api/admin/posts:', err);
-    res.status(500).json({ error: err.message || 'Failed to create post' });
-  }
 });
 
 /* --- Update Post --- */
@@ -1413,106 +1164,7 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
     } = req.body;
 
     const now = new Date();
-
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-
-      // Save revision
-      await new Revision({
-        postId: post._id,
-        title: post.title,
-        content: post.content,
-        excerpt: post.excerpt,
-        labels: post.labels,
-        category: post.category
-      }).save().catch(() => {});
-
-      if (title) post.title = title.trim();
-
-      // Slug update
-      if (title || slug) {
-        let newSlug = generateSlug(title || post.title, slug || post.slug);
-        const dup = await BlogPost.findOne({ slug: newSlug, _id: { $ne: post._id } });
-        if (dup) newSlug = `${newSlug}-${Date.now().toString(36)}`;
-        post.slug = newSlug;
-      }
-
-      if (content !== undefined) {
-        post.content = content;
-        post.readingTime = calcReadingTime(content);
-      }
-      if (category) post.category = category.trim().toLowerCase();
-      if (labels !== undefined) {
-        post.labels = Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [];
-      }
-
-      // Re-run editorial automation if missing fields
-      const rawPost = {
-        title: post.title,
-        excerpt: excerpt !== undefined ? excerpt.trim() : post.excerpt,
-        content: post.content,
-        coverImage: coverImage !== undefined ? coverImage.trim() : post.coverImage,
-        author: post.author,
-        category: post.category,
-        labels: post.labels,
-        slug: post.slug,
-        editorialAutomation: post.editorialAutomation
-      };
-
-      const enriched = await editorialService.enrichPostData(rawPost, {
-        autoExcerpt: autoExcerpt !== false,
-        autoTags: autoTags !== false,
-        autoImage: autoImage !== false
-      });
-
-      post.excerpt = enriched.excerpt;
-      post.labels = enriched.labels;
-      post.coverImage = enriched.coverImage;
-      post.editorialAutomation = enriched.editorialAutomation;
-
-      if (seoTitle !== undefined) post.seoTitle = seoTitle.trim();
-      if (seoDescription !== undefined) post.seoDescription = seoDescription.trim();
-      if (canonicalUrl !== undefined) post.canonicalUrl = canonicalUrl.trim();
-      if (featured !== undefined) post.featured = !!featured;
-      if (commentsEnabled !== undefined) post.commentsEnabled = commentsEnabled !== false;
-
-      let postStatus = status || post.status;
-      if (postStatus === 'scheduled' && scheduledAt) {
-        const parsedSched = new Date(scheduledAt);
-        if (!isNaN(parsedSched.getTime())) {
-          if (parsedSched > now) {
-            post.status = 'scheduled';
-            post.scheduledAt = parsedSched;
-          } else {
-            post.status = 'published';
-            post.publishedAt = parsedSched;
-            post.scheduledAt = null;
-          }
-        }
-      } else if (postStatus === 'published') {
-        post.status = 'published';
-        if (!post.publishedAt) post.publishedAt = now;
-        post.scheduledAt = null;
-      } else if (postStatus) {
-        post.status = postStatus;
-      }
-
-      await post.save();
-
-      // Sync to inMemoryPosts
-      const idx = inMemoryPosts.findIndex(p => String(p._id) === String(post._id));
-      if (idx !== -1) {
-        inMemoryPosts[idx] = post.toObject();
-      } else {
-        inMemoryPosts.unshift(post.toObject());
-      }
-
-      return res.json({ post });
-    }
-
-    // In-memory fallback
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
     inMemoryRevisions.unshift({
@@ -1523,14 +1175,14 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
       excerpt: post.excerpt,
       labels: [...(post.labels || [])],
       category: post.category,
-      savedAt: now
+      savedAt: now.toISOString()
     });
 
     if (title) post.title = title.trim();
 
     if (title || slug) {
       let newSlug = generateSlug(title || post.title, slug || post.slug);
-      if (inMemoryPosts.some(p => p.slug === newSlug && p._id !== post._id)) {
+      if (inMemoryPosts.some(p => p.slug === newSlug && String(p._id) !== String(post._id))) {
         newSlug = `${newSlug}-${Date.now().toString(36)}`;
       }
       post.slug = newSlug;
@@ -1595,7 +1247,8 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
       post.status = postStatus;
     }
 
-    post.updatedAt = now;
+    post.updatedAt = now.toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ post });
   } catch (err) {
     console.error('Error updating post:', err);
@@ -1605,19 +1258,11 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      post.status = 'trashed';
-      await post.save();
-      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
-      if (inMem) inMem.status = 'trashed';
-      return res.json({ success: true });
-    }
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'trashed';
-    post.updatedAt = new Date();
+    post.updatedAt = new Date().toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to trash post' });
@@ -1626,24 +1271,12 @@ app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      post.status = 'published';
-      post.publishedAt = new Date();
-      await post.save();
-      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
-      if (inMem) {
-        inMem.status = 'published';
-        inMem.publishedAt = post.publishedAt;
-      }
-      return res.json({ post });
-    }
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'published';
-    post.publishedAt = new Date();
-    post.updatedAt = new Date();
+    post.publishedAt = new Date().toISOString();
+    post.updatedAt = new Date().toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to publish' });
@@ -1652,19 +1285,11 @@ app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      post.status = 'draft';
-      await post.save();
-      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
-      if (inMem) inMem.status = 'draft';
-      return res.json({ post });
-    }
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'draft';
-    post.updatedAt = new Date();
+    post.updatedAt = new Date().toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to unpublish' });
@@ -1673,19 +1298,11 @@ app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const post = await BlogPost.findById(req.params.id);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-      post.status = 'draft';
-      await post.save();
-      const inMem = inMemoryPosts.find(p => String(p._id) === String(post._id));
-      if (inMem) inMem.status = 'draft';
-      return res.json({ post });
-    }
-    const post = inMemoryPosts.find(p => p._id === req.params.id);
+    const post = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'draft';
-    post.updatedAt = new Date();
+    post.updatedAt = new Date().toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to restore' });
@@ -1694,16 +1311,11 @@ app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      await BlogPost.findByIdAndDelete(req.params.id);
-      await Revision.deleteMany({ postId: req.params.id }).catch(() => {});
-      inMemoryPosts = inMemoryPosts.filter(p => String(p._id) !== String(req.params.id));
-      return res.json({ success: true });
-    }
-    const idx = inMemoryPosts.findIndex(p => p._id === req.params.id);
+    const idx = inMemoryPosts.findIndex(p => String(p._id) === String(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Post not found' });
-    inMemoryPosts.splice(idx, 1);
-    inMemoryRevisions = inMemoryRevisions.filter(r => r.postId !== req.params.id);
+    const [deletedPost] = inMemoryPosts.splice(idx, 1);
+    rtdbRemove(`posts/${deletedPost._id}`);
+    inMemoryRevisions = inMemoryRevisions.filter(r => String(r.postId) !== String(req.params.id));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to permanently delete' });
@@ -1712,41 +1324,24 @@ app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) =>
 
 app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const original = await BlogPost.findById(req.params.id);
-      if (!original) return res.status(404).json({ error: 'Post not found' });
-      const dup = new BlogPost({
-        title: `${original.title} (Copy)`,
-        slug: `${original.slug}-copy-${Date.now()}`,
-        excerpt: original.excerpt,
-        content: original.content,
-        coverImage: original.coverImage,
-        category: original.category,
-        labels: [...(original.labels || [])],
-        status: 'draft',
-        seoTitle: original.seoTitle,
-        seoDescription: original.seoDescription
-      });
-      await dup.save();
-      inMemoryPosts.unshift(dup.toObject());
-      return res.status(201).json({ post: dup });
-    }
-
-    const original = inMemoryPosts.find(p => p._id === req.params.id);
+    const original = inMemoryPosts.find(p => String(p._id) === String(req.params.id));
     if (!original) return res.status(404).json({ error: 'Post not found' });
+    const newId = `post-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const dup = {
       ...original,
-      _id: `post-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      _id: newId,
+      id: newId,
       title: `${original.title} (Copy)`,
       slug: `${original.slug}-copy-${Date.now()}`,
       status: 'draft',
       publishedAt: null,
       scheduledAt: null,
       viewCount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     inMemoryPosts.unshift(dup);
+    rtdbSet(`posts/${newId}`, dup);
     res.status(201).json({ post: dup });
   } catch (err) {
     res.status(500).json({ error: 'Failed to duplicate post' });
@@ -1756,11 +1351,7 @@ app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
 /* --- Revisions --- */
 app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const revisions = await Revision.find({ postId: req.params.postId }).sort({ savedAt: -1 }).limit(20);
-      return res.json({ revisions });
-    }
-    const revisions = inMemoryRevisions.filter(r => r.postId === req.params.postId);
+    const revisions = inMemoryRevisions.filter(r => String(r.postId) === String(req.params.postId));
     res.json({ revisions });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch revisions' });
@@ -1769,24 +1360,9 @@ app.get('/api/admin/revisions/:postId', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const revision = await Revision.findById(req.params.revisionId);
-      if (!revision) return res.status(404).json({ error: 'Revision not found' });
-      const post = await BlogPost.findById(revision.postId);
-      if (!post) return res.status(404).json({ error: 'Post not found' });
-
-      post.title = revision.title;
-      post.content = revision.content;
-      post.excerpt = revision.excerpt;
-      if (revision.labels) post.labels = revision.labels;
-      if (revision.category) post.category = revision.category;
-      await post.save();
-      return res.json({ post });
-    }
-
-    const revision = inMemoryRevisions.find(r => r._id === req.params.revisionId);
+    const revision = inMemoryRevisions.find(r => String(r._id) === String(req.params.revisionId));
     if (!revision) return res.status(404).json({ error: 'Revision not found' });
-    const post = inMemoryPosts.find(p => p._id === revision.postId);
+    const post = inMemoryPosts.find(p => String(p._id) === String(revision.postId));
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
     post.title = revision.title;
@@ -1794,7 +1370,8 @@ app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req,
     post.excerpt = revision.excerpt;
     if (revision.labels) post.labels = [...revision.labels];
     if (revision.category) post.category = revision.category;
-    post.updatedAt = new Date();
+    post.updatedAt = new Date().toISOString();
+    rtdbSet(`posts/${post._id}`, post);
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to restore revision' });
@@ -1804,15 +1381,6 @@ app.post('/api/admin/revisions/:revisionId/restore', authMiddleware, async (req,
 /* --- Admin Labels & Categories --- */
 app.get('/api/admin/labels', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const pipeline = [
-        { $unwind: '$labels' },
-        { $group: { _id: '$labels', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ];
-      const results = await BlogPost.aggregate(pipeline);
-      return res.json({ labels: results.map(r => ({ name: r._id, count: r.count })) });
-    }
     const counts = {};
     inMemoryPosts.forEach(p => {
       (p.labels || []).forEach(l => { counts[l] = (counts[l] || 0) + 1; });
@@ -1826,10 +1394,6 @@ app.get('/api/admin/labels', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/categories', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      const categories = await BlogPost.distinct('category');
-      return res.json({ categories: categories.filter(Boolean) });
-    }
     const cats = [...new Set(inMemoryPosts.map(p => p.category).filter(Boolean))];
     res.json({ categories: cats });
   } catch (err) {
@@ -1840,11 +1404,6 @@ app.get('/api/admin/categories', authMiddleware, async (req, res) => {
 /* --- Admin Content Update Endpoints --- */
 app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let settings = await SiteSettings.findOne();
-      if (!settings) settings = await SiteSettings.create(initialSettings);
-      return res.json({ settings });
-    }
     res.json({ settings: inMemorySettings });
   } catch (err) {
     res.json({ settings: inMemorySettings });
@@ -1854,10 +1413,7 @@ app.get('/api/admin/content/settings', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
   try {
     inMemorySettings = { ...inMemorySettings, ...req.body };
-    if (await isDbConnected()) {
-      const settings = await SiteSettings.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
-      return res.json({ settings });
-    }
+    rtdbSet('settings', inMemorySettings);
     res.json({ settings: inMemorySettings });
   } catch (err) {
     console.error('Error saving settings:', err);
@@ -1867,11 +1423,6 @@ app.put('/api/admin/content/settings', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let page = await Homepage.findOne();
-      if (!page) page = await Homepage.create(initialHomepage);
-      return res.json({ page });
-    }
     res.json({ page: inMemoryHomepage });
   } catch (err) {
     res.json({ page: inMemoryHomepage });
@@ -1881,10 +1432,7 @@ app.get('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
   try {
     inMemoryHomepage = { ...inMemoryHomepage, ...req.body };
-    if (await isDbConnected()) {
-      const page = await Homepage.findOneAndUpdate({}, { $set: req.body }, { new: true, upsert: true, setDefaultsOnInsert: true });
-      return res.json({ page });
-    }
+    rtdbSet('homepage', inMemoryHomepage);
     res.json({ page: inMemoryHomepage });
   } catch (err) {
     console.error('Error saving homepage:', err);
@@ -1894,13 +1442,6 @@ app.put('/api/admin/content/homepage', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
-    if (await isDbConnected()) {
-      let profile = await AboutProfile.findOne();
-      if (!profile || !profile.biography) {
-        profile = await AboutProfile.findOneAndUpdate({}, { $set: initialAbout }, { upsert: true, new: true });
-      }
-      return res.json({ profile });
-    }
     res.json({ profile: inMemoryAbout });
   } catch (err) {
     res.json({ profile: inMemoryAbout });
@@ -1910,14 +1451,7 @@ app.get('/api/admin/content/about', authMiddleware, async (req, res) => {
 app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
   try {
     inMemoryAbout = { ...inMemoryAbout, ...req.body };
-    if (await isDbConnected()) {
-      const profile = await AboutProfile.findOneAndUpdate(
-        {},
-        { $set: req.body },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
-      return res.json({ profile });
-    }
+    rtdbSet('about', inMemoryAbout);
     res.json({ profile: inMemoryAbout });
   } catch (err) {
     console.error('Error saving about profile:', err);
@@ -1931,36 +1465,6 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
     const { search, status, category, page = 1, limit = 50 } = req.query;
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 50);
-
-    if (await isDbConnected()) {
-      const query = {};
-      if (status && status !== 'all') query.status = status;
-      if (category && category !== 'all') query.category = new RegExp('^' + category.trim() + '$', 'i');
-      if (search) {
-        const searchRegex = new RegExp(search.trim(), 'i');
-        query.$or = [
-          { title: searchRegex },
-          { caption: searchRegex },
-          { location: searchRegex },
-          { tags: searchRegex }
-        ];
-      }
-
-      const total = await GalleryItem.countDocuments(query);
-      const photos = await GalleryItem.find(query)
-        .sort({ order: 1, date: -1, createdAt: -1 })
-        .skip((pNum - 1) * lNum)
-        .limit(lNum);
-      const categories = await GalleryItem.distinct('category');
-
-      return res.json({
-        photos,
-        total,
-        page: pNum,
-        totalPages: Math.ceil(total / lNum) || 1,
-        categories: categories.filter(Boolean)
-      });
-    }
 
     let list = [...inMemoryGallery];
     if (status && status !== 'all') {
@@ -2000,12 +1504,7 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
 app.get('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (await isDbConnected()) {
-      const photo = await GalleryItem.findById(id);
-      if (!photo) return res.status(404).json({ error: 'Photo not found' });
-      return res.json({ photo });
-    }
-    const photo = inMemoryGallery.find(p => p._id === id);
+    const photo = inMemoryGallery.find(p => String(p._id) === String(id));
     if (!photo) return res.status(404).json({ error: 'Photo not found' });
     res.json({ photo });
   } catch (err) {
@@ -2224,6 +1723,683 @@ app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) =>
   }
 });
 
+/* =========================================================
+   REAL-TIME MESSENGER & LIVE CHAT SYSTEM
+   (Firebase Firestore / RTDB + MongoDB Atlas + WebSockets)
+   ========================================================= */
+
+const chatUploadsDir = path.join(__dirname, 'uploads', 'chat');
+if (!fs.existsSync(chatUploadsDir)) {
+  fs.mkdirSync(chatUploadsDir, { recursive: true });
+}
+
+const chatUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, chatUploadsDir),
+  filename: (req, file, cb) => {
+    const ext = (path.extname(file.originalname) || '.bin').toLowerCase();
+    const cleanName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
+    cb(null, `${cleanName || 'attachment'}-${unique}${ext}`);
+  }
+});
+
+const chatUpload = multer({
+  storage: chatUploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf', 'text/plain', 'application/zip'
+    ];
+    if (file.mimetype && (file.mimetype.startsWith('image/') || allowedMimes.includes(file.mimetype))) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type. Allowed: Images, PDF, TXT, ZIP (max 10MB).'));
+    }
+  }
+});
+
+// Load Firebase Applet Configuration
+let firebaseAppletConfig = {};
+try {
+  const cfgPath = path.join(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(cfgPath)) {
+    firebaseAppletConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  }
+} catch (e) {
+  console.warn('Could not read firebase-applet-config.json:', e.message);
+}
+
+if (process.env.FIREBASE_DATABASE_URL && !firebaseAppletConfig.databaseURL) {
+  firebaseAppletConfig.databaseURL = process.env.FIREBASE_DATABASE_URL;
+}
+
+// Server-side Firebase Firestore client for dual-persistence synchronization
+let serverFirestore = null;
+let firestoreModules = null;
+(async () => {
+  try {
+    if (firebaseAppletConfig && firebaseAppletConfig.apiKey && firebaseAppletConfig.projectId) {
+      const fbApp = require('firebase/app');
+      const fbFirestore = require('firebase/firestore');
+      const appInstance = fbApp.getApps().length > 0
+        ? fbApp.getApp()
+        : fbApp.initializeApp(firebaseAppletConfig);
+      serverFirestore = firebaseAppletConfig.firestoreDatabaseId
+        ? fbFirestore.getFirestore(appInstance, firebaseAppletConfig.firestoreDatabaseId)
+        : fbFirestore.getFirestore(appInstance);
+      firestoreModules = fbFirestore;
+    }
+  } catch (e) {
+    console.warn('Server Firebase initialization warning:', e.message);
+  }
+})();
+
+// In-memory conversation store (synced with MongoDB & Firebase)
+const inMemoryConversations = new Map();
+
+function isValidVisitorIdString(vid) {
+  return typeof vid === 'string' && vid.length >= 16 && vid.length <= 128 && /^visitor_[a-zA-Z0-9_\-]+$/.test(vid);
+}
+
+function sanitizeChatMessage(raw, visitorId) {
+  const now = Date.now();
+  const msgId = (raw.messageId && /^[a-zA-Z0-9_\-]{8,128}$/.test(String(raw.messageId)))
+    ? String(raw.messageId)
+    : `msg_${now}_${crypto.randomBytes(4).toString('hex')}`;
+  const sender = raw.sender === 'admin' ? 'admin' : 'visitor';
+  const type = ['text', 'image', 'file'].includes(raw.type) ? raw.type : 'text';
+  const text = String(raw.text || '').trim().slice(0, 4000);
+  const mediaUrl = String(raw.mediaUrl || '').trim().slice(0, 1000);
+  const fileName = String(raw.fileName || '').trim().slice(0, 255);
+  const read = Boolean(raw.read);
+  const timestamp = (typeof raw.timestamp === 'number' && raw.timestamp > 0) ? raw.timestamp : now;
+
+  return {
+    messageId: msgId,
+    visitorId,
+    sender,
+    text,
+    type,
+    mediaUrl,
+    fileName,
+    read,
+    timestamp
+  };
+}
+
+async function getOrCreateConversation(visitorId, createIfMissing = false, meta = {}) {
+  if (!isValidVisitorIdString(visitorId)) return null;
+
+  let mem = inMemoryConversations.get(visitorId);
+  if (!mem) {
+    // Try reading from RTDB
+    const rtdbConv = await rtdbGet(`conversations/${visitorId}`);
+    if (rtdbConv && typeof rtdbConv === 'object') {
+      mem = rtdbConv;
+      inMemoryConversations.set(visitorId, mem);
+    }
+  }
+
+  if (!mem && createIfMissing) {
+    const now = Date.now();
+    mem = {
+      visitorId,
+      visitorName: String(meta.visitorName || '').trim().slice(0, 100),
+      visitorEmail: String(meta.visitorEmail || '').trim().slice(0, 160),
+      createdAt: now,
+      lastMessage: '',
+      lastMessageAt: now,
+      lastSender: 'visitor',
+      unreadForAdmin: 0,
+      unreadForVisitor: 0,
+      status: 'active',
+      visitorOnline: Boolean(meta.visitorOnline),
+      visitorLastSeen: now,
+      visitorTyping: false,
+      adminTyping: false,
+      pageUrl: String(meta.pageUrl || '').trim().slice(0, 500),
+      userAgent: String(meta.userAgent || '').trim().slice(0, 300),
+      messages: []
+    };
+    inMemoryConversations.set(visitorId, mem);
+    rtdbSet(`conversations/${visitorId}`, mem);
+  }
+  return mem || null;
+}
+
+async function saveConversationState(conv) {
+  if (!conv || !conv.visitorId) return conv;
+  inMemoryConversations.set(conv.visitorId, conv);
+  rtdbSet(`conversations/${conv.visitorId}`, conv);
+  return conv;
+}
+
+// Sync visitor or admin message to Firestore when written via server
+async function syncVisitorMessageToFirestore(conv, msg) {
+  if (!serverFirestore || !firestoreModules) return;
+  try {
+    const { doc, writeBatch, serverTimestamp } = firestoreModules;
+    const batch = writeBatch(serverFirestore);
+    const convRef = doc(serverFirestore, 'conversations', conv.visitorId);
+    const msgRef = doc(serverFirestore, 'conversations', conv.visitorId, 'messages', msg.messageId);
+
+    const convData = {
+      visitorId: conv.visitorId,
+      lastMessage: (conv.lastMessage || '').slice(0, 2000),
+      lastSender: msg.sender === 'admin' ? 'admin' : 'visitor',
+      unreadForAdmin: Math.min(10000, Math.max(0, Number(conv.unreadForAdmin) || 0)),
+      unreadForVisitor: Math.min(10000, Math.max(0, Number(conv.unreadForVisitor) || 0)),
+      status: conv.status || 'active',
+      visitorOnline: Boolean(conv.visitorOnline),
+      visitorTyping: false,
+      adminTyping: false,
+      pageUrl: String(conv.pageUrl || '').slice(0, 500),
+      lastTimestamp: Date.now(),
+      lastMessageAt: serverTimestamp()
+    };
+    if (conv.visitorName && conv.visitorName.trim()) {
+      convData.visitorName = conv.visitorName.trim().slice(0, 100);
+    }
+
+    const msgData = {
+      messageId: msg.messageId,
+      visitorId: conv.visitorId,
+      sender: msg.sender === 'admin' ? 'admin' : 'visitor',
+      text: (msg.text || '').slice(0, 4000),
+      type: msg.type || 'text',
+      read: Boolean(msg.read),
+      timestamp: msg.timestamp || Date.now()
+    };
+    if (msg.mediaUrl) msgData.mediaUrl = String(msg.mediaUrl).slice(0, 1000);
+    if (msg.fileName) msgData.fileName = String(msg.fileName).slice(0, 255);
+
+    batch.set(convRef, convData, { merge: true });
+    batch.set(msgRef, msgData, { merge: true });
+    await batch.commit().catch(() => {});
+  } catch (e) {
+    // Non-blocking sync
+  }
+}
+
+/* --- WebSocket Connection Registry & Broadcaster --- */
+const visitorSockets = new Map(); // visitorId -> Set<WebSocket>
+const adminSockets = new Set();   // Set<WebSocket>
+
+function sendWsJson(ws, payload) {
+  if (ws && ws.readyState === 1) {
+    try {
+      ws.send(JSON.stringify(payload));
+    } catch (e) {}
+  }
+}
+
+function broadcastToVisitor(visitorId, payload) {
+  const set = visitorSockets.get(visitorId);
+  if (set) {
+    for (const ws of set) {
+      sendWsJson(ws, payload);
+    }
+  }
+}
+
+function broadcastToAdmins(payload) {
+  for (const ws of adminSockets) {
+    sendWsJson(ws, payload);
+  }
+}
+
+function summarizeConversation(conv) {
+  if (!conv) return null;
+  const { messages, ...summary } = conv;
+  return {
+    ...summary,
+    messageCount: Array.isArray(messages) ? messages.length : 0
+  };
+}
+
+/* --- Core Chat Mutation Helpers (Idempotent) --- */
+async function appendChatMessage(visitorId, rawMsg, meta = {}) {
+  const conv = await getOrCreateConversation(visitorId, true, meta);
+  if (!conv) throw new Error('Invalid visitorId');
+  if (conv.status === 'blocked' && rawMsg.sender !== 'admin') {
+    throw new Error('This conversation cannot receive new messages.');
+  }
+
+  const msg = sanitizeChatMessage(rawMsg, visitorId);
+  if (!msg.text && !msg.mediaUrl) {
+    throw new Error('Message text or attachment is required.');
+  }
+
+  // Idempotency guard: if messageId already exists, return existing without duplicating
+  if (!Array.isArray(conv.messages)) conv.messages = [];
+  const existingMsg = conv.messages.find(m => m.messageId === msg.messageId);
+  if (existingMsg) {
+    return { conversation: conv, message: existingMsg, duplicate: true };
+  }
+
+  conv.messages.push(msg);
+  conv.lastMessage = msg.text || (msg.type === 'image' ? '📷 Image' : `📎 ${msg.fileName || 'Attachment'}`);
+  conv.lastMessageAt = msg.timestamp;
+  conv.lastSender = msg.sender;
+
+  if (meta.visitorName && String(meta.visitorName).trim()) {
+    conv.visitorName = String(meta.visitorName).trim().slice(0, 100);
+  }
+  if (meta.visitorEmail && String(meta.visitorEmail).trim()) {
+    conv.visitorEmail = String(meta.visitorEmail).trim().slice(0, 160);
+  }
+  if (meta.pageUrl && String(meta.pageUrl).trim()) {
+    conv.pageUrl = String(meta.pageUrl).trim().slice(0, 500);
+  }
+  if (meta.userAgent && String(meta.userAgent).trim()) {
+    conv.userAgent = String(meta.userAgent).trim().slice(0, 300);
+  }
+
+  if (msg.sender === 'visitor') {
+    conv.unreadForAdmin = (Number(conv.unreadForAdmin) || 0) + 1;
+    conv.visitorTyping = false;
+    conv.visitorOnline = true;
+    conv.visitorLastSeen = Date.now();
+    if (conv.status === 'archived') conv.status = 'active';
+  } else {
+    conv.unreadForVisitor = (Number(conv.unreadForVisitor) || 0) + 1;
+    conv.unreadForAdmin = 0;
+    conv.adminTyping = false;
+    // Mark all visitor messages as read when admin replies
+    conv.messages.forEach(m => {
+      if (m.sender === 'visitor') m.read = true;
+    });
+  }
+
+  await saveConversationState(conv);
+
+  syncVisitorMessageToFirestore(conv, msg);
+
+  const eventPayload = {
+    type: 'message:created',
+    visitorId,
+    message: msg,
+    conversation: summarizeConversation(conv)
+  };
+  broadcastToVisitor(visitorId, eventPayload);
+  broadcastToAdmins(eventPayload);
+
+  return { conversation: conv, message: msg, duplicate: false };
+}
+
+async function markConversationRead(visitorId, readerRole) {
+  const conv = await getOrCreateConversation(visitorId, false);
+  if (!conv) return null;
+
+  let changed = false;
+  if (!Array.isArray(conv.messages)) conv.messages = [];
+
+  if (readerRole === 'visitor') {
+    if (conv.unreadForVisitor > 0) {
+      conv.unreadForVisitor = 0;
+      changed = true;
+    }
+    conv.messages.forEach(m => {
+      if (m.sender === 'admin' && !m.read) {
+        m.read = true;
+        changed = true;
+      }
+    });
+  } else if (readerRole === 'admin') {
+    if (conv.unreadForAdmin > 0) {
+      conv.unreadForAdmin = 0;
+      changed = true;
+    }
+    conv.messages.forEach(m => {
+      if (m.sender === 'visitor' && !m.read) {
+        m.read = true;
+        changed = true;
+      }
+    });
+  }
+
+  if (changed) {
+    await saveConversationState(conv);
+    const readPayload = {
+      type: 'messages:read',
+      visitorId,
+      reader: readerRole,
+      readAt: Date.now(),
+      conversation: summarizeConversation(conv)
+    };
+    broadcastToVisitor(visitorId, readPayload);
+    broadcastToAdmins(readPayload);
+  }
+
+  return conv;
+}
+
+/* --- Public Chat REST Endpoints --- */
+
+app.get('/api/chat/config', (req, res) => {
+  res.json({
+    firebaseConfig,
+    wsPath: '/ws/chat',
+    realtimeEnabled: true
+  });
+});
+
+app.get('/api/chat/conversation/:visitorId', async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    if (!isValidVisitorIdString(visitorId)) {
+      return res.status(400).json({ error: 'Invalid visitor ID format' });
+    }
+    const conv = await getOrCreateConversation(visitorId, false);
+    if (!conv) {
+      return res.json({
+        exists: false,
+        conversation: {
+          visitorId,
+          status: 'active',
+          unreadForVisitor: 0,
+          unreadForAdmin: 0,
+          messages: []
+        }
+      });
+    }
+    if (req.query.markRead === '1' || req.query.markRead === 'true') {
+      await markConversationRead(visitorId, 'visitor');
+    }
+    res.json({ exists: true, conversation: conv });
+  } catch (err) {
+    console.error('Error fetching visitor conversation:', err);
+    res.status(500).json({ error: 'Failed to load conversation' });
+  }
+});
+
+app.post('/api/chat/conversation/:visitorId/message', async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    if (!isValidVisitorIdString(visitorId)) {
+      return res.status(400).json({ error: 'Invalid visitor ID format' });
+    }
+    const { text, type = 'text', mediaUrl = '', fileName = '', messageId, visitorName, visitorEmail, pageUrl } = req.body || {};
+    const result = await appendChatMessage(
+      visitorId,
+      { messageId, sender: 'visitor', text, type, mediaUrl, fileName, read: false, timestamp: Date.now() },
+      { visitorName, visitorEmail, pageUrl, userAgent: req.headers['user-agent'] || '', visitorOnline: true }
+    );
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      conversation: summarizeConversation(result.conversation),
+      duplicate: result.duplicate
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to send message' });
+  }
+});
+
+// Sync messages created directly via Firebase by client into MongoDB backend
+app.post('/api/chat/conversation/:visitorId/sync', async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    if (!isValidVisitorIdString(visitorId)) {
+      return res.status(400).json({ error: 'Invalid visitor ID format' });
+    }
+    const { messages = [], visitorName, pageUrl } = req.body || {};
+    if (!Array.isArray(messages) || messages.length === 0) {
+      const conv = await getOrCreateConversation(visitorId, false);
+      return res.json({ success: true, conversation: conv });
+    }
+    let lastConv = null;
+    for (const m of messages.slice(0, 50)) {
+      if (m && (m.text || m.mediaUrl)) {
+        const resSync = await appendChatMessage(
+          visitorId,
+          {
+            messageId: m.messageId,
+            sender: m.sender === 'admin' ? 'admin' : 'visitor',
+            text: m.text,
+            type: m.type || 'text',
+            mediaUrl: m.mediaUrl || '',
+            fileName: m.fileName || '',
+            read: Boolean(m.read),
+            timestamp: typeof m.timestamp === 'number' ? m.timestamp : Date.now()
+          },
+          { visitorName, pageUrl }
+        ).catch(() => null);
+        if (resSync && resSync.conversation) lastConv = resSync.conversation;
+      }
+    }
+    if (!lastConv) lastConv = await getOrCreateConversation(visitorId, false);
+    res.json({ success: true, conversation: lastConv });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to sync conversation' });
+  }
+});
+
+app.post('/api/chat/conversation/:visitorId/read', async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    if (!isValidVisitorIdString(visitorId)) {
+      return res.status(400).json({ error: 'Invalid visitor ID format' });
+    }
+    const conv = await markConversationRead(visitorId, 'visitor');
+    res.json({ success: true, conversation: summarizeConversation(conv) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
+
+app.post('/api/chat/conversation/:visitorId/typing', async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    if (!isValidVisitorIdString(visitorId)) {
+      return res.status(400).json({ error: 'Invalid visitor ID format' });
+    }
+    const { typing = false, visitorName, visitorEmail, pageUrl } = req.body || {};
+    const conv = await getOrCreateConversation(visitorId, false);
+    if (conv) {
+      conv.visitorTyping = Boolean(typing);
+      conv.visitorOnline = true;
+      conv.visitorLastSeen = Date.now();
+      if (visitorName !== undefined && String(visitorName).trim()) {
+        conv.visitorName = String(visitorName).trim().slice(0, 100);
+      }
+      if (visitorEmail !== undefined && String(visitorEmail).trim()) {
+        conv.visitorEmail = String(visitorEmail).trim().slice(0, 160);
+      }
+      if (pageUrl !== undefined && String(pageUrl).trim()) {
+        conv.pageUrl = String(pageUrl).trim().slice(0, 500);
+      }
+      await saveConversationState(conv);
+    }
+    broadcastToAdmins({
+      type: 'typing:update',
+      visitorId,
+      sender: 'visitor',
+      typing: Boolean(typing),
+      visitorName: conv ? conv.visitorName : (visitorName || '')
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update typing state' });
+  }
+});
+
+app.post('/api/chat/upload', (req, res, next) => {
+  chatUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file attached' });
+    }
+    const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
+    res.json({
+      success: true,
+      url: `/uploads/chat/${req.file.filename}`,
+      fileName: req.file.originalname || req.file.filename,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      type: isImage ? 'image' : 'file'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'File upload failed' });
+  }
+});
+
+/* --- Admin Chat REST Endpoints --- */
+
+app.get('/api/admin/chat/conversations', authMiddleware, async (req, res) => {
+  try {
+    const { status = 'all', search = '' } = req.query;
+    let list = [];
+
+    list = Array.from(inMemoryConversations.values());
+
+    // Filter out empty conversations that have 0 messages unless specifically searched
+    list = list.filter(c => (Array.isArray(c.messages) && c.messages.length > 0) || c.lastMessage);
+
+    const totalUnreadForAdmin = list.reduce((sum, c) => sum + (Number(c.unreadForAdmin) || 0), 0);
+
+    if (status === 'unread') {
+      list = list.filter(c => (Number(c.unreadForAdmin) || 0) > 0);
+    } else if (status && status !== 'all') {
+      list = list.filter(c => c.status === status);
+    }
+
+    if (search && String(search).trim()) {
+      const q = String(search).trim().toLowerCase();
+      list = list.filter(c =>
+        (c.visitorId || '').toLowerCase().includes(q) ||
+        (c.visitorName || '').toLowerCase().includes(q) ||
+        (c.visitorEmail || '').toLowerCase().includes(q) ||
+        (c.lastMessage || '').toLowerCase().includes(q) ||
+        (Array.isArray(c.messages) && c.messages.some(m => (m.text || '').toLowerCase().includes(q)))
+      );
+    }
+
+    list.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+    res.json({
+      conversations: list.map(summarizeConversation),
+      totalUnreadForAdmin,
+      total: list.length
+    });
+  } catch (err) {
+    console.error('Error listing admin conversations:', err);
+    res.status(500).json({ error: 'Failed to load conversations' });
+  }
+});
+
+app.get('/api/admin/chat/conversations/:visitorId', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    const conv = await getOrCreateConversation(visitorId, false);
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+    res.json({ conversation: conv });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+app.post('/api/admin/chat/conversations/:visitorId/reply', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    const { text, type = 'text', mediaUrl = '', fileName = '', messageId } = req.body || {};
+    const result = await appendChatMessage(
+      visitorId,
+      { messageId, sender: 'admin', text, type, mediaUrl, fileName, read: false, timestamp: Date.now() },
+      {}
+    );
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      conversation: result.conversation
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to send reply' });
+  }
+});
+
+app.post('/api/admin/chat/conversations/:visitorId/read', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    const conv = await markConversationRead(visitorId, 'admin');
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+    res.json({ success: true, conversation: summarizeConversation(conv) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark conversation read' });
+  }
+});
+
+app.post('/api/admin/chat/conversations/:visitorId/typing', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    const { typing = false } = req.body || {};
+    const conv = await getOrCreateConversation(visitorId, false);
+    if (conv) {
+      conv.adminTyping = Boolean(typing);
+      await saveConversationState(conv);
+    }
+    broadcastToVisitor(visitorId, {
+      type: 'typing:update',
+      visitorId,
+      sender: 'admin',
+      typing: Boolean(typing)
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update admin typing state' });
+  }
+});
+
+app.put('/api/admin/chat/conversations/:visitorId/status', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    const { status, visitorName, visitorEmail } = req.body || {};
+    const conv = await getOrCreateConversation(visitorId, false);
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+
+    if (status && ['active', 'archived', 'blocked'].includes(status)) {
+      conv.status = status;
+    }
+    if (visitorName !== undefined) {
+      conv.visitorName = String(visitorName).trim().slice(0, 100);
+    }
+    if (visitorEmail !== undefined) {
+      conv.visitorEmail = String(visitorEmail).trim().slice(0, 160);
+    }
+
+    await saveConversationState(conv);
+
+    const payload = {
+      type: 'conversation:updated',
+      visitorId,
+      conversation: summarizeConversation(conv)
+    };
+    broadcastToVisitor(visitorId, payload);
+    broadcastToAdmins(payload);
+
+    res.json({ success: true, conversation: summarizeConversation(conv) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update conversation' });
+  }
+});
+
+app.delete('/api/admin/chat/conversations/:visitorId', authMiddleware, async (req, res) => {
+  try {
+    const { visitorId } = req.params;
+    inMemoryConversations.delete(visitorId);
+    rtdbRemove(`conversations/${visitorId}`);
+    broadcastToAdmins({ type: 'conversation:deleted', visitorId });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
 /* --- Dynamic Sitemap, RSS Feed, Robots.txt and Article SEO HTML Pre-rendering --- */
 
 app.get('/robots.txt', (req, res) => {
@@ -2280,13 +2456,7 @@ async function servePostHtmlWithSeo(req, res) {
       return res.send(html);
     }
 
-    let post = null;
-    if (await isDbConnected()) {
-      post = await BlogPost.findOne({ slug: slug, status: 'published' });
-    }
-    if (!post) {
-      post = inMemoryPosts.find(p => p.slug === slug && p.status === 'published');
-    }
+    let post = inMemoryPosts.find(p => p.slug === slug && p.status === 'published');
 
     if (post) {
       const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
@@ -2393,12 +2563,7 @@ app.get('/post/:slug', servePostHtmlWithSeo);
 app.get('/sitemap.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
-    let posts = [];
-    if (await isDbConnected()) {
-      posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 }).select('slug publishedAt updatedAt');
-    } else {
-      posts = inMemoryPosts.filter(p => p.status === 'published');
-    }
+    const posts = inMemoryPosts.filter(p => p.status === 'published');
 
     const today = new Date().toISOString().split('T')[0];
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -2430,12 +2595,7 @@ app.get('/sitemap.xml', async (req, res) => {
 app.get('/feed.xml', async (req, res) => {
   try {
     const siteUrl = 'https://chitron.iam.bd';
-    let posts = [];
-    if (await isDbConnected()) {
-      posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1 });
-    } else {
-      posts = inMemoryPosts.filter(p => p.status === 'published');
-    }
+    const posts = inMemoryPosts.filter(p => p.status === 'published');
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
     xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
@@ -2478,16 +2638,9 @@ app.get(['/', '/index.html'], async (req, res, next) => {
   try {
     let html = fs.readFileSync(path.join(staticRoot, 'index.html'), 'utf8');
     let topCover = null;
-    if (homeCache && homeCache.posts && homeCache.posts.length > 0 && homeCache.posts[0].coverImage) {
-      topCover = homeCache.posts[0].coverImage;
-    } else if (await isDbConnected()) {
-      const topPost = await BlogPost.findOne({
-        $or: [
-          { status: 'published' },
-          { status: 'scheduled', scheduledAt: { $lte: new Date() } }
-        ]
-      }).sort({ publishedAt: -1, createdAt: -1 }).select('coverImage').lean();
-      if (topPost && topPost.coverImage) topCover = topPost.coverImage;
+    const published = inMemoryPosts.filter(p => p.status === 'published' || (p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt) <= new Date()));
+    if (published.length > 0 && published[0].coverImage) {
+      topCover = published[0].coverImage;
     }
 
     if (topCover) {
@@ -2512,9 +2665,11 @@ app.use(express.static(staticRoot, {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else if (filePath.match(/\.(png|jpg|jpeg|webp|svg|ico)$/i)) {
       res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=604800');
-    } else if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
-      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-    } else if (filePath.endsWith('.html')) {
+    } else if (filePath.endsWith('.apk')) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', 'attachment; filename="app.apk"');
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    } else if (filePath.endsWith('.css') || filePath.endsWith('.js') || filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
     }
   }
@@ -2535,7 +2690,174 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, HOST, () => {
+/* --- HTTP + WebSocket Server Initialization --- */
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server, path: '/ws/chat' });
+
+wss.on('connection', (ws, req) => {
+  let clientRole = null;
+  let clientVisitorId = null;
+
+  ws.on('message', async (raw) => {
+    try {
+      const data = JSON.parse(String(raw));
+      if (!data || !data.type) return;
+
+      // 1. Client Authentication / Room Join
+      if (data.type === 'visitor:join') {
+        const vid = String(data.visitorId || '').trim();
+        if (!isValidVisitorIdString(vid)) {
+          return sendWsJson(ws, { type: 'error', error: 'Invalid visitorId' });
+        }
+        clientRole = 'visitor';
+        clientVisitorId = vid;
+        if (!visitorSockets.has(vid)) visitorSockets.set(vid, new Set());
+        visitorSockets.get(vid).add(ws);
+
+        const conv = await getOrCreateConversation(vid, false);
+        if (conv) {
+          conv.visitorOnline = true;
+          conv.visitorLastSeen = Date.now();
+          if (data.pageUrl) conv.pageUrl = String(data.pageUrl).slice(0, 500);
+          await saveConversationState(conv);
+          broadcastToAdmins({
+            type: 'presence:update',
+            visitorId: vid,
+            visitorOnline: true,
+            visitorLastSeen: conv.visitorLastSeen,
+            pageUrl: conv.pageUrl
+          });
+        }
+
+        sendWsJson(ws, {
+          type: 'conversation:init',
+          visitorId: vid,
+          conversation: conv || {
+            visitorId: vid,
+            status: 'active',
+            unreadForVisitor: 0,
+            unreadForAdmin: 0,
+            messages: []
+          }
+        });
+        return;
+      }
+
+      if (data.type === 'admin:join') {
+        const token = String(data.token || '').trim();
+        if (!isValidToken(token)) {
+          return sendWsJson(ws, { type: 'error', error: 'Unauthorized admin session' });
+        }
+        clientRole = 'admin';
+        adminSockets.add(ws);
+        sendWsJson(ws, { type: 'admin:connected', timestamp: Date.now() });
+        return;
+      }
+
+      // 2. Real-time Message Send over WebSocket
+      if (data.type === 'message:send') {
+        if (clientRole === 'visitor' && clientVisitorId) {
+          await appendChatMessage(
+            clientVisitorId,
+            {
+              messageId: data.messageId,
+              sender: 'visitor',
+              text: data.text,
+              type: data.msgType || 'text',
+              mediaUrl: data.mediaUrl || '',
+              fileName: data.fileName || '',
+              read: false,
+              timestamp: Date.now()
+            },
+            {
+              visitorName: data.visitorName,
+              visitorEmail: data.visitorEmail,
+              pageUrl: data.pageUrl,
+              visitorOnline: true
+            }
+          );
+        } else if (clientRole === 'admin' && data.visitorId) {
+          await appendChatMessage(
+            String(data.visitorId),
+            {
+              messageId: data.messageId,
+              sender: 'admin',
+              text: data.text,
+              type: data.msgType || 'text',
+              mediaUrl: data.mediaUrl || '',
+              fileName: data.fileName || '',
+              read: false,
+              timestamp: Date.now()
+            },
+            {}
+          );
+        }
+        return;
+      }
+
+      // 3. Real-time Read Receipts
+      if (data.type === 'messages:mark_read') {
+        if (clientRole === 'visitor' && clientVisitorId) {
+          await markConversationRead(clientVisitorId, 'visitor');
+        } else if (clientRole === 'admin' && data.visitorId) {
+          await markConversationRead(String(data.visitorId), 'admin');
+        }
+        return;
+      }
+
+      // 4. Real-time Typing Indicators
+      if (data.type === 'typing:set') {
+        if (clientRole === 'visitor' && clientVisitorId) {
+          broadcastToAdmins({
+            type: 'typing:update',
+            visitorId: clientVisitorId,
+            sender: 'visitor',
+            typing: Boolean(data.typing)
+          });
+        } else if (clientRole === 'admin' && data.visitorId) {
+          broadcastToVisitor(String(data.visitorId), {
+            type: 'typing:update',
+            visitorId: String(data.visitorId),
+            sender: 'admin',
+            typing: Boolean(data.typing)
+          });
+        }
+        return;
+      }
+    } catch (err) {
+      sendWsJson(ws, { type: 'error', error: err.message || 'WebSocket message error' });
+    }
+  });
+
+  ws.on('close', async () => {
+    if (clientRole === 'admin') {
+      adminSockets.delete(ws);
+    } else if (clientRole === 'visitor' && clientVisitorId) {
+      const set = visitorSockets.get(clientVisitorId);
+      if (set) {
+        set.delete(ws);
+        if (set.size === 0) {
+          visitorSockets.delete(clientVisitorId);
+          const conv = await getOrCreateConversation(clientVisitorId, false);
+          if (conv) {
+            conv.visitorOnline = false;
+            conv.visitorTyping = false;
+            conv.visitorLastSeen = Date.now();
+            await saveConversationState(conv);
+          }
+          broadcastToAdmins({
+            type: 'presence:update',
+            visitorId: clientVisitorId,
+            visitorOnline: false,
+            visitorLastSeen: Date.now()
+          });
+        }
+      }
+    }
+  });
+});
+
+server.listen(PORT, HOST, () => {
   console.log(`Chitrons Archive server running on http://${HOST}:${PORT}`);
   console.log(`Admin PIN configured: ${ADMIN_PIN ? 'Yes' : 'No'}`);
 });

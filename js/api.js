@@ -279,9 +279,117 @@ const API = (() => {
 
     async adminUnpublishGalleryPhoto(id) {
       return request('/api/admin/gallery/' + id + '/unpublish', { method: 'POST' });
+    },
+
+    /* --- Live Chat & Messenger (Public + Admin) --- */
+    getAdminToken() {
+      return getToken();
+    },
+
+    async getChatConfig() {
+      return request('/api/chat/config');
+    },
+
+    async getFirebaseConfig() {
+      const data = await request('/api/chat/config');
+      return (data && data.firebaseConfig) ? data.firebaseConfig : data;
+    },
+
+    async getVisitorConversation(visitorId, markRead = false) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + (markRead ? '?markRead=1' : ''));
+    },
+
+    async sendVisitorMessage(visitorId, payload) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + '/message', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async syncVisitorConversation(visitorId, payload) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + '/sync', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async markVisitorConversationRead(visitorId) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + '/read', {
+        method: 'POST'
+      });
+    },
+
+    async markVisitorChatRead(visitorId) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + '/read', {
+        method: 'POST'
+      });
+    },
+
+    async setVisitorTyping(visitorId, payload) {
+      return request('/api/chat/conversation/' + encodeURIComponent(visitorId) + '/typing', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async adminGetConversations({ status, search } = {}) {
+      const p = new URLSearchParams();
+      if (status && status !== 'all') p.set('status', status);
+      if (search) p.set('search', search);
+      const q = p.toString();
+      return request('/api/admin/chat/conversations' + (q ? '?' + q : ''));
+    },
+
+    async adminGetConversation(visitorId) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId));
+    },
+
+    async adminReplyConversation(visitorId, payload) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId) + '/reply', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async adminSendReply(visitorId, payload) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId) + '/reply', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async adminMarkConversationRead(visitorId) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId) + '/read', {
+        method: 'POST'
+      });
+    },
+
+    async adminSetTyping(visitorId, typing) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId) + '/typing', {
+        method: 'POST',
+        body: JSON.stringify({ typing: Boolean(typing) })
+      });
+    },
+
+    async adminUpdateConversationStatus(visitorId, payload) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId) + '/status', {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async adminDeleteConversation(visitorId) {
+      return request('/api/admin/chat/conversations/' + encodeURIComponent(visitorId), {
+        method: 'DELETE'
+      });
     }
   };
 })();
+
+if (typeof window !== 'undefined') {
+  window.API = API;
+  window.api = API;
+}
 
 if (typeof window !== 'undefined') {
   window.API = API;
