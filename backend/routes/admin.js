@@ -80,6 +80,80 @@ router.get('/posts', async (req, res) => {
   }
 });
 
+/* --- Editorial Automation & Preview Endpoints --- */
+router.post('/posts/preview', async (req, res) => {
+  try {
+    const { title, excerpt, content, category, labels, coverImage, autoExcerpt = true, autoTags = true, autoImage = true } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required for preview' });
+    }
+    const rawPost = {
+      title: title.trim(),
+      excerpt: (excerpt || '').trim(),
+      content: content || '',
+      coverImage: (coverImage || '').trim(),
+      author: 'Chitron Bhattacharjee',
+      category: (category || 'general').trim().toLowerCase(),
+      labels: Array.isArray(labels) ? labels.map(l => String(l).trim().toLowerCase()).filter(Boolean) : [],
+      slug: generateSlug(title)
+    };
+    const enriched = await editorialService.enrichPostData(rawPost, {
+      autoExcerpt: autoExcerpt !== false,
+      autoTags: autoTags !== false,
+      autoImage: autoImage !== false
+    });
+    res.json({ post: enriched });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to generate preview' });
+  }
+});
+
+router.post('/posts/regenerate-field', async (req, res) => {
+  try {
+    const { field, title = '', content = '', category = '', excerpt = '' } = req.body;
+    const cleanContent = String(content || '').replace(/<[^>]*>/g, '').trim();
+    if ((!title || !title.trim()) && !cleanContent) {
+      return res.status(400).json({ error: 'Content or title is required' });
+    }
+
+    if (field === 'excerpt') {
+      const generated = await editorialService.generateExcerpt(title, content, { category });
+      return res.json({ value: generated, source: 'generated' });
+    } else if (field === 'tags') {
+      const generated = await editorialService.generateTags(title, excerpt, content, category);
+      return res.json({ value: generated, source: 'generated' });
+    } else if (field === 'featuredImage') {
+      const query = await editorialService.extractSearchKeywords(title, content, category);
+      const stock = await editorialService.searchStockImage(query, category);
+      if (stock && stock.url) {
+        const effectiveTitle = (title && title.trim()) ? title.trim() : (cleanContent.slice(0, 65) || 'Chitrons Archive');
+        const renderedUrl = await editorialService.createFeaturedImage(
+          stock,
+          effectiveTitle,
+          'Chitron Bhattacharjee',
+          generateSlug(effectiveTitle)
+        );
+        return res.json({
+          value: renderedUrl || stock.url,
+          source: 'pollinations',
+          metadata: {
+            provider: stock.provider,
+            providerImageId: stock.providerImageId,
+            sourceUrl: stock.sourceUrl,
+            photographer: stock.photographer,
+            photographerUrl: stock.photographerUrl,
+            searchQuery: stock.searchQuery
+          }
+        });
+      }
+      return res.status(404).json({ error: 'Failed to generate image URL' });
+    }
+    res.status(400).json({ error: 'Invalid field specified' });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to regenerate field' });
+  }
+});
+
 /* --- Get single post (admin) --- */
 router.get('/posts/:id', async (req, res) => {
   try {

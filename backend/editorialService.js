@@ -24,7 +24,7 @@ if (!fs.existsSync(FONTS_DIR)) {
   fs.mkdirSync(FONTS_DIR, { recursive: true });
 }
 
-// Register Kalpurush font in @napi-rs/canvas for Skia/HarfBuzz Bengali conjunct shaping
+// Register Kalpurush and Noto Serif Bengali fonts in @napi-rs/canvas for Skia/HarfBuzz Bengali conjunct shaping
 const kalpurushFontPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
 if (fs.existsSync(kalpurushFontPath)) {
   try {
@@ -32,6 +32,18 @@ if (fs.existsSync(kalpurushFontPath)) {
   } catch (err) {
     console.warn('[EditorialService] Canvas font registration note:', err.message);
   }
+}
+const notoBoldFontPath = path.join(FONTS_DIR, 'NotoSerifBengali-Bold.ttf');
+if (fs.existsSync(notoBoldFontPath)) {
+  try {
+    GlobalFonts.registerFromPath(notoBoldFontPath, 'NotoSerifBengali');
+  } catch (err) {}
+}
+const notoRegFontPath = path.join(FONTS_DIR, 'NotoSerifBengali-Regular.ttf');
+if (fs.existsSync(notoRegFontPath)) {
+  try {
+    GlobalFonts.registerFromPath(notoRegFontPath, 'NotoSerifBengaliRegular');
+  } catch (err) {}
 }
 
 let cachedKalpurushBase64 = null;
@@ -484,14 +496,224 @@ async function searchStockImage(searchQuery, category = '') {
 }
 
 /* =========================================================
-   5. FEATURED IMAGE URL RESOLUTION (Pollinations AI Direct)
+   5. FEATURED IMAGE COMPOSITING (Pollinations AI + Title & Writer Overlay)
    ========================================================= */
-async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhattacharjee', slug = 'post') {
-  if (stockPhotoObj && stockPhotoObj.url) {
-    return stockPhotoObj.url;
+function wrapCanvasText(ctx, text, maxWidth, maxLines = 3) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return ['Untitled Article'];
+
+  const lines = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const testLine = currentLine + ' ' + word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = word;
+      if (lines.length >= maxLines - 1) {
+        const remaining = [currentLine, ...words.slice(i + 1)].join(' ');
+        let truncated = remaining;
+        while (ctx.measureText(truncated).width > maxWidth && truncated.length > 4) {
+          truncated = truncated.slice(0, -2).trim() + '…';
+        }
+        lines.push(truncated);
+        return lines;
+      }
+    } else {
+      currentLine = testLine;
+    }
   }
-  const fallbackPrompt = await extractSearchKeywords(title, '', '');
-  return buildPollinationsUrl(fallbackPrompt);
+  if (currentLine) lines.push(currentLine);
+  return lines.slice(0, maxLines);
+}
+
+async function downloadPollinationsBuffer(imageUrl) {
+  if (!imageUrl) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 22000);
+    const res = await fetch(imageUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+      }
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf && buf.length > 1000) return buf;
+    }
+  } catch (err) {
+    // Fallback to fetchBuffer
+  }
+  try {
+    const buf = await fetchBuffer(imageUrl);
+    if (buf && buf.length > 1000) return buf;
+  } catch (err) {
+    console.warn('[EditorialService] Pollinations download warning:', err.message);
+  }
+  return null;
+}
+
+async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhattacharjee', slug = 'post') {
+  const WIDTH = 1200;
+  const HEIGHT = 630;
+  const cleanTitle = stripHtml(title || 'Chitrons Archive').trim() || 'Chitrons Archive';
+  const cleanAuthor = String(author || 'Chitron Bhattacharjee').trim();
+
+  // Resolve Pollinations AI URL
+  let sourceImageUrl = (stockPhotoObj && stockPhotoObj.url) ? stockPhotoObj.url : '';
+  if (!sourceImageUrl) {
+    const fallbackPrompt = await extractSearchKeywords(cleanTitle, '', '');
+    sourceImageUrl = buildPollinationsUrl(fallbackPrompt);
+  }
+
+  // 1. Download Pollinations AI background image buffer (or generate fallback dark background)
+  let baseImageBuffer = await downloadPollinationsBuffer(sourceImageUrl);
+  let resizedBaseBuffer;
+
+  if (baseImageBuffer) {
+    try {
+      resizedBaseBuffer = await sharp(baseImageBuffer)
+        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'center' })
+        .jpeg({ quality: 92 })
+        .toBuffer();
+    } catch (e) {
+      resizedBaseBuffer = null;
+    }
+  }
+
+  if (!resizedBaseBuffer) {
+    const bgCanvas = createCanvas(WIDTH, HEIGHT);
+    const bgCtx = bgCanvas.getContext('2d');
+    const bgGrad = bgCtx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+    bgGrad.addColorStop(0, '#0f172a');
+    bgGrad.addColorStop(0.5, '#1e293b');
+    bgGrad.addColorStop(1, '#090d16');
+    bgCtx.fillStyle = bgGrad;
+    bgCtx.fillRect(0, 0, WIDTH, HEIGHT);
+    resizedBaseBuffer = bgCanvas.toBuffer('image/png');
+  }
+
+  // 2. Create @napi-rs/canvas overlay for dark gradient, blue bar, article title & writer name
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  // Left-to-right editorial dark gradient for crisp text contrast
+  const horizGrad = ctx.createLinearGradient(0, 0, WIDTH, 0);
+  horizGrad.addColorStop(0, 'rgba(10, 14, 24, 0.86)');
+  horizGrad.addColorStop(0.55, 'rgba(10, 14, 24, 0.62)');
+  horizGrad.addColorStop(1, 'rgba(10, 14, 24, 0.28)');
+  ctx.fillStyle = horizGrad;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Subtle bottom vignette
+  const vertGrad = ctx.createLinearGradient(0, HEIGHT * 0.5, 0, HEIGHT);
+  vertGrad.addColorStop(0, 'rgba(8, 12, 20, 0)');
+  vertGrad.addColorStop(1, 'rgba(8, 12, 20, 0.60)');
+  ctx.fillStyle = vertGrad;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Configure typography for Bengali (Kalpurush) or English
+  const hasBengali = isBengaliText(cleanTitle);
+  const fontFamily = hasBengali
+    ? '"Kalpurush", "NotoSerifBengali", sans-serif'
+    : '"NotoSerifBengali", "Liberation Serif", Georgia, serif';
+
+  let fontSize = 52;
+  let lineHeight = 64;
+  const maxTextWidth = 760;
+
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  let lines = wrapCanvasText(ctx, cleanTitle, maxTextWidth, 3);
+
+  if (lines.length >= 3) {
+    fontSize = 46;
+    lineHeight = 58;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    lines = wrapCanvasText(ctx, cleanTitle, maxTextWidth, 3);
+  }
+
+  const totalTextHeight = lines.length * lineHeight;
+  const barHeight = totalTextHeight + 8;
+  const centerY = 310;
+  const barY = Math.round(centerY - barHeight / 2);
+  const barX = 50;
+  const barWidth = 6;
+  const textX = 76;
+
+  // Draw vertical blue accent bar (#2262e6)
+  ctx.save();
+  ctx.fillStyle = '#2262e6';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(barX, barY, barWidth, barHeight, 3);
+  } else {
+    ctx.rect(barX, barY, barWidth, barHeight);
+  }
+  ctx.fill();
+  ctx.restore();
+
+  // Draw Article Title lines
+  ctx.save();
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineY = barY + 4 + (i + 0.5) * lineHeight;
+    ctx.fillText(lines[i], textX, lineY);
+  }
+  ctx.restore();
+
+  // Draw Writer Name & Archive Attribution below title
+  const authorLineText = `BY ${cleanAuthor.toUpperCase()} · CHITRONS ARCHIVE`;
+  const authorY = barY + barHeight + 48;
+  ctx.save();
+  ctx.font = '600 15px "Liberation Serif", "NotoSerifBengaliRegular", Georgia, serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.80)';
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(authorLineText, textX, authorY);
+  ctx.restore();
+
+  // Draw subtle bottom-right source credit
+  const creditText = `Photo: ${(stockPhotoObj && stockPhotoObj.photographer) || 'Pollinations AI'} (${(stockPhotoObj && stockPhotoObj.provider) || 'flux'})`;
+  ctx.save();
+  ctx.font = '400 11px "Liberation Sans", sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(creditText, WIDTH - 22, HEIGHT - 14);
+  ctx.restore();
+
+  const overlayBuffer = canvas.toBuffer('image/png');
+
+  // 3. Composite overlay onto resized Pollinations AI image and save to /uploads/featured-images
+  const safeSlug = String(slug || cleanTitle || 'post')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}-]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40) || 'post';
+
+  const filename = `featured-${safeSlug}-${Date.now()}.jpg`;
+  const outputPath = path.join(UPLOADS_DIR, filename);
+
+  await sharp(resizedBaseBuffer)
+    .composite([{ input: overlayBuffer, top: 0, left: 0 }])
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toFile(outputPath);
+
+  return `/uploads/featured-images/${filename}`;
 }
 
 /* =========================================================
@@ -554,15 +776,37 @@ async function enrichPostData(postData, automationSettings = {}) {
     result.editorialAutomation.tags = { source: 'manual' };
   }
 
-  // 3. Automatic Featured Image via Pollinations AI (Flux) from content
-  if (!result.coverImage || result.coverImage.trim() === '') {
-    if (autoImage) {
+  // 3. Automatic Featured Image via Pollinations AI (Flux) + Article Title & Author Overlay
+  const currentCover = (result.coverImage || '').trim();
+  const isRawPollinationsUrl = currentCover.includes('image.pollinations.ai/prompt/');
+
+  if (!currentCover || isRawPollinationsUrl) {
+    if (autoImage || isRawPollinationsUrl) {
       try {
-        const searchQuery = await extractSearchKeywords(result.title, result.content, result.category);
-        const stockPhoto = await searchStockImage(searchQuery, result.category);
+        let stockPhoto;
+        if (isRawPollinationsUrl) {
+          stockPhoto = {
+            url: currentCover,
+            provider: 'pollinations',
+            providerImageId: `flux-${Date.now()}`,
+            sourceUrl: currentCover,
+            photographer: 'Pollinations AI (Flux)',
+            photographerUrl: 'https://pollinations.ai',
+            searchQuery: currentCover
+          };
+        } else {
+          const searchQuery = await extractSearchKeywords(result.title, result.content, result.category);
+          stockPhoto = await searchStockImage(searchQuery, result.category);
+        }
 
         if (stockPhoto && stockPhoto.url) {
-          result.coverImage = stockPhoto.url;
+          const renderedPath = await createFeaturedImage(
+            stockPhoto,
+            result.title,
+            result.author || 'Chitron Bhattacharjee',
+            result.slug || 'post'
+          );
+          result.coverImage = renderedPath || stockPhoto.url;
           result.editorialAutomation.featuredImage = {
             source: 'pollinations',
             provider: stockPhoto.provider,

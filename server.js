@@ -756,7 +756,23 @@ async function syncLiveProductionPosts() {
             }
             addedOrUpdated = true;
 
-            if (normalized.coverImage && normalized.coverImage.startsWith('/uploads/')) {
+            if (normalized.coverImage && normalized.coverImage.includes('image.pollinations.ai/prompt/')) {
+              try {
+                const compositedCover = await editorialService.createFeaturedImage(
+                  {
+                    url: normalized.coverImage,
+                    provider: 'pollinations',
+                    photographer: 'Pollinations AI (Flux)'
+                  },
+                  normalized.title,
+                  normalized.author || 'Chitron Bhattacharjee',
+                  normalized.slug
+                );
+                if (compositedCover) {
+                  normalized.coverImage = compositedCover;
+                }
+              } catch (e) {}
+            } else if (normalized.coverImage && normalized.coverImage.startsWith('/uploads/')) {
               const localCover = path.join(__dirname, decodeURIComponent(normalized.coverImage).replace(/^\/+/, ''));
               if (!fs.existsSync(localCover)) {
                 fetch(`https://chitron.iam.bd${normalized.coverImage}`).then(async r => {
@@ -817,6 +833,28 @@ async function initFirebaseRTDB() {
     // Remove any mock posts and sync live articles from chitron.iam.bd
     inMemoryPosts = inMemoryPosts.filter(p => !isMockPost(p));
     await syncLiveProductionPosts();
+
+    // Upgrade any raw Pollinations AI cover images to include the Title & Writer Name overlay
+    for (const post of inMemoryPosts) {
+      if (post.coverImage && post.coverImage.includes('image.pollinations.ai/prompt/')) {
+        try {
+          const composited = await editorialService.createFeaturedImage(
+            {
+              url: post.coverImage,
+              provider: 'pollinations',
+              photographer: 'Pollinations AI (Flux)'
+            },
+            post.title,
+            post.author || 'Chitron Bhattacharjee',
+            post.slug
+          );
+          if (composited) {
+            post.coverImage = composited;
+          }
+        } catch (e) {}
+      }
+    }
+
     await syncPostsToRTDB();
 
     // Attach Real-Time Cloud Firestore Listeners so Production & Preview stay synced live
@@ -1402,8 +1440,15 @@ app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) =
       const query = await editorialService.extractSearchKeywords(title, content, category);
       const stock = await editorialService.searchStockImage(query, category);
       if (stock && stock.url) {
+        const effectiveTitle = (title && title.trim()) ? title.trim() : (cleanContent.slice(0, 65) || 'Chitrons Archive');
+        const renderedUrl = await editorialService.createFeaturedImage(
+          stock,
+          effectiveTitle,
+          'Chitron Bhattacharjee',
+          generateSlug(effectiveTitle)
+        );
         return res.json({
-          value: stock.url,
+          value: renderedUrl || stock.url,
           source: 'pollinations',
           metadata: {
             provider: stock.provider,
