@@ -26,7 +26,19 @@ service cloud.firestore {
     }
 
     match /presence/{visitorId} {
-      allow get, list, create, update, delete: if isValidVisitorId(visitorId);
+      allow get, list, create, update, delete: if isValidVisitorId(visitorId) || visitorId == 'admin';
+    }
+
+    match /posts/{postId} {
+      allow read, write: if true;
+    }
+
+    match /gallery/{photoId} {
+      allow read, write: if true;
+    }
+
+    match /cms/{docId} {
+      allow read, write: if true;
     }
 
     match /chat_admins/{uid} {

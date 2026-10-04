@@ -6,6 +6,7 @@ const session = require('express-session');
 const { initializeApp, getApps, getApp } = require('firebase/app');
 const { getDatabase, ref, get, set, update, remove, push } = require('firebase/database');
 const { getAuth, signInAnonymously } = require('firebase/auth');
+const fbFirestoreModule = require('firebase/firestore');
 
 require('dotenv').config();
 
@@ -25,6 +26,26 @@ const firebaseAuth = getAuth(firebaseApp);
 const firebaseRTDB = getDatabase(firebaseApp);
 
 signInAnonymously(firebaseAuth).catch(err => console.warn('Firebase RTDB Auth notice:', err.message));
+
+// Shared Cloud Firestore Initialization (ai-studio-chitronsarchive-10788b8b-fa5c-47f1-b9ba-5688024b52b7)
+let firebaseAppletConfig = {};
+let serverFirestore = null;
+let firestoreModules = fbFirestoreModule;
+try {
+  const cfgPath = path.join(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(cfgPath)) {
+    firebaseAppletConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (firebaseAppletConfig && firebaseAppletConfig.apiKey && firebaseAppletConfig.projectId) {
+      const existingFsApp = getApps().find(a => a.name === 'applet-firestore');
+      const fsAppInstance = existingFsApp || initializeApp(firebaseAppletConfig, 'applet-firestore');
+      serverFirestore = firebaseAppletConfig.firestoreDatabaseId
+        ? fbFirestoreModule.getFirestore(fsAppInstance, firebaseAppletConfig.firestoreDatabaseId)
+        : fbFirestoreModule.getFirestore(fsAppInstance);
+    }
+  }
+} catch (e) {
+  console.warn('Cloud Firestore init warning:', e.message);
+}
 
 const cors = require('cors');
 const slugify = require('slugify');
@@ -117,16 +138,29 @@ if (!fs.existsSync(imageCacheDir)) {
   fs.mkdirSync(imageCacheDir, { recursive: true });
 }
 
-// Automatic WebP content negotiation for /uploads/featured-images/*.jpg
-app.use('/uploads', (req, res, next) => {
-  if (req.path.endsWith('.jpg') && req.headers.accept && req.headers.accept.includes('image/webp')) {
-    const webpPath = path.join(__dirname, 'uploads', req.path.replace(/\.jpg$/, '.webp'));
-    if (fs.existsSync(webpPath)) {
-      res.setHeader('Content-Type', 'image/webp');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.sendFile(webpPath);
+// Automatic WebP content negotiation and cross-instance upload sync for /uploads/*
+app.use('/uploads', async (req, res, next) => {
+  try {
+    const requestedRel = decodeURIComponent(req.path).replace(/^\/+/, '');
+    const localFile = path.join(__dirname, 'uploads', requestedRel);
+    if (!fs.existsSync(localFile) && requestedRel.startsWith('featured-images/')) {
+      const remoteUrl = `https://chitron.iam.bd/uploads/${req.path.replace(/^\/+/, '')}`;
+      const remoteRes = await fetch(remoteUrl).catch(() => null);
+      if (remoteRes && remoteRes.ok) {
+        const buf = Buffer.from(await remoteRes.arrayBuffer());
+        fs.mkdirSync(path.dirname(localFile), { recursive: true });
+        fs.writeFileSync(localFile, buf);
+      }
     }
-  }
+    if (req.path.endsWith('.jpg') && req.headers.accept && req.headers.accept.includes('image/webp')) {
+      const webpPath = localFile.replace(/\.jpg$/, '.webp');
+      if (fs.existsSync(webpPath)) {
+        res.setHeader('Content-Type', 'image/webp');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.sendFile(webpPath);
+      }
+    }
+  } catch (e) {}
   next();
 });
 
@@ -169,11 +203,24 @@ app.get('/api/images/optimize', async (req, res) => {
       }
       inputBuffer = Buffer.from(await response.arrayBuffer());
     } else {
-      const localPath = path.join(__dirname, rawUrl.replace(/^\/+/, ''));
+      const localPath = path.join(__dirname, decodeURIComponent(rawUrl).replace(/^\/+/, ''));
       if (!fs.existsSync(localPath)) {
-        return res.status(404).send('Image not found');
+        if (rawUrl.startsWith('/uploads/')) {
+          const remoteUrl = `https://chitron.iam.bd${rawUrl}`;
+          const remoteRes = await fetch(remoteUrl).catch(() => null);
+          if (remoteRes && remoteRes.ok) {
+            inputBuffer = Buffer.from(await remoteRes.arrayBuffer());
+            fs.mkdirSync(path.dirname(localPath), { recursive: true });
+            fs.writeFileSync(localPath, inputBuffer);
+          } else {
+            return res.status(404).send('Image not found');
+          }
+        } else {
+          return res.status(404).send('Image not found');
+        }
+      } else {
+        inputBuffer = fs.readFileSync(localPath);
       }
-      inputBuffer = fs.readFileSync(localPath);
     }
 
     const optimized = await sharp(inputBuffer)
@@ -263,62 +310,22 @@ function isValidToken(token) {
 /* --- Data State Definitions --- */
 
 /* --- Seed Data Definitions --- */
-const initialPosts = [
-  {
-    title: 'Building ShiPu AI: Reflections on Bengali Conversational Systems',
-    slug: 'building-shipu-ai-reflections',
-    excerpt: 'Designing conversational personalities and language model integrations tailored for Bengali speakers.',
-    content: '<p>Building <strong>ShiPu AI</strong> began with a simple question: how can we make conversational AI feel natural, context-aware, and culturally nuanced for Bengali speakers?</p><p>Most large language model interfaces prioritize English language patterns. Tailoring an agent to handle regional conversational phrasing, colloquial expressions, and rapid prompt chaining required thoughtful prompt architecture and continuous testing.</p><h3>Key Architectural Decisions</h3><p>Rather than relying solely on raw API responses, we wrapped the conversational loop in a custom Node.js middleware layer. This allowed us to preserve session contexts, manage conversational memory, and enforce consistent agent personas.</p><p>Building practical tools is always an iterative craft — and every edge case teaches something valuable about human-machine interaction.</p>',
-    author: 'Chitron Bhattacharjee',
-    category: 'ai',
-    labels: ['artificial-intelligence', 'nodejs', 'chatbots', 'experiments'],
-    status: 'published',
-    publishedAt: new Date('2025-01-15T10:00:00Z'),
-    readingTime: 3,
-    viewCount: 142,
-    seoTitle: 'Building ShiPu AI: Reflections on Bengali Conversational Systems',
-    seoDescription: 'Designing conversational personalities and language model integrations tailored for Bengali speakers.',
-    canonicalUrl: '',
-    featured: true,
-    commentsEnabled: true
-  },
-  {
-    title: 'Why I Prefer Minimalist Digital Archives',
-    slug: 'why-i-prefer-minimalist-digital-archives',
-    excerpt: 'Thoughts on building personal web spaces with lightweight code, calm typography, and zero clutter.',
-    content: '<p>The modern web is often bloated with megabytes of telemetry scripts, aggressive popups, and unnecessary animations. In building <em>Chitrons Archive</em>, the goal was the exact opposite: radical simplicity.</p><p>A personal website should load instantly, look sharp on any device, and put the reading experience first. Semantic HTML, thoughtful CSS custom properties, and lightweight client-side interactions achieve in a few kilobytes what heavy frameworks often complicate.</p><blockquote>"Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away."</blockquote><p>When you strip away distractions, all that remains is the work and the ideas.</p>',
-    author: 'Chitron Bhattacharjee',
-    category: 'web-development',
-    labels: ['design', 'minimalism', 'javascript', 'architecture'],
-    status: 'published',
-    publishedAt: new Date('2025-02-10T14:30:00Z'),
-    readingTime: 2,
-    viewCount: 98,
-    seoTitle: 'Why I Prefer Minimalist Digital Archives',
-    seoDescription: 'Thoughts on building personal web spaces with lightweight code, calm typography, and zero clutter.',
-    canonicalUrl: '',
-    featured: false,
-    commentsEnabled: true
-  },
-  {
-    title: 'On Writing and Code: Two Mediums of Thought',
-    slug: 'on-writing-and-code',
-    excerpt: 'Exploring how constructing software and writing prose both require precision, structure, and empathy for the reader.',
-    content: '<p>At first glance, writing code and writing essays seem like entirely different disciplines. One instructs a machine; the other communicates with human minds.</p><p>Yet at their core, both require the same fundamental habit: decomposing complex thoughts into clear, structured, and legible units. Good code is written for human maintainers first. Good writing is edited until every sentence carries its own weight.</p><p>Balancing technical development with creative writing keeps both perspectives sharp.</p>',
-    author: 'Chitron Bhattacharjee',
-    category: 'reflections',
-    labels: ['writing', 'philosophy', 'creativity'],
-    status: 'published',
-    publishedAt: new Date('2025-02-22T08:00:00Z'),
-    readingTime: 2,
-    viewCount: 65,
-    seoTitle: 'On Writing and Code: Two Mediums of Thought',
-    seoDescription: 'Exploring how constructing software and writing prose both require precision, structure, and empathy for the reader.',
-    canonicalUrl: '',
-    featured: false,
-    commentsEnabled: true
-  }
-];
+const MOCK_POST_SLUGS = new Set([
+  'building-shipu-ai-reflections',
+  'why-i-prefer-minimalist-digital-archives',
+  'on-writing-and-code'
+]);
+const MOCK_POST_IDS = new Set(['post-1', 'post-2', 'post-3']);
+const deletedPostIds = new Set();
+
+function isMockPost(p) {
+  if (!p || typeof p !== 'object') return true;
+  const id = String(p._id || p.id || '');
+  const slug = String(p.slug || '');
+  return MOCK_POST_IDS.has(id) || MOCK_POST_SLUGS.has(slug);
+}
+
+const initialPosts = [];
 
 const initialAbout = {
   name: 'Chitron Bhattacharjee',
@@ -476,75 +483,403 @@ const initialGallery = [
   }
 ];
 
-/* --- In-Memory State Fallback --- */
-let inMemoryPosts = initialPosts.map((p, i) => ({ ...p, _id: `mem-post-${i + 1}`, createdAt: new Date(), updatedAt: new Date() }));
-let inMemoryGallery = initialGallery.map((g, i) => ({ ...g, _id: `mem-photo-${i + 1}`, createdAt: g.date || new Date(), updatedAt: g.date || new Date() }));
+/* --- In-Memory State & Persistent Firebase RTDB Mirror --- */
+let inMemoryPosts = initialPosts.map((p, i) => ({
+  ...p,
+  _id: `post-${i + 1}`,
+  id: `post-${i + 1}`,
+  createdAt: (p.publishedAt || new Date()).toISOString(),
+  updatedAt: (p.publishedAt || new Date()).toISOString()
+}));
+let inMemoryGallery = initialGallery.map((g, i) => ({
+  ...g,
+  _id: `photo-${i + 1}`,
+  id: `photo-${i + 1}`,
+  date: (g.date || new Date()).toISOString(),
+  createdAt: (g.date || new Date()).toISOString(),
+  updatedAt: (g.date || new Date()).toISOString()
+}));
 let inMemoryRevisions = [];
 let inMemoryAbout = { ...initialAbout };
 let inMemoryHomepage = { ...initialHomepage };
 let inMemorySettings = { ...initialSettings };
+let adminPresenceState = {
+  adminOnline: false,
+  adminLastSeen: Date.now() - 12 * 60 * 1000
+};
+
+const rtdbMirrorPath = path.join(__dirname, 'uploads', 'firebase-rtdb-mirror.json');
+let rtdbMirrorState = {
+  seeded: false,
+  posts: {},
+  gallery: {},
+  about: null,
+  homepage: null,
+  settings: null,
+  conversations: {}
+};
+
+function loadRtdbMirrorFromDisk() {
+  try {
+    if (fs.existsSync(rtdbMirrorPath)) {
+      const raw = fs.readFileSync(rtdbMirrorPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        rtdbMirrorState = { ...rtdbMirrorState, ...parsed };
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load RTDB mirror from disk:', err.message);
+  }
+  return false;
+}
+
+function saveRtdbMirrorToDisk() {
+  try {
+    fs.writeFileSync(rtdbMirrorPath, JSON.stringify(rtdbMirrorState, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('Could not save RTDB mirror to disk:', err.message);
+  }
+}
+
+function setNestedPath(obj, pathStr, val) {
+  const parts = String(pathStr).split('/').filter(Boolean);
+  if (parts.length === 0) return;
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+    cur = cur[k];
+  }
+  cur[parts[parts.length - 1]] = JSON.parse(JSON.stringify(val));
+}
+
+function getNestedPath(obj, pathStr) {
+  const parts = String(pathStr).split('/').filter(Boolean);
+  let cur = obj;
+  for (const k of parts) {
+    if (!cur || typeof cur !== 'object' || !(k in cur)) return undefined;
+    cur = cur[k];
+  }
+  return cur;
+}
+
+function removeNestedPath(obj, pathStr) {
+  const parts = String(pathStr).split('/').filter(Boolean);
+  if (parts.length === 0) return;
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    if (!cur || typeof cur !== 'object' || !(k in cur)) return;
+    cur = cur[k];
+  }
+  delete cur[parts[parts.length - 1]];
+}
 
 /* --- Firebase Realtime Database CRUD Helpers --- */
 async function rtdbGet(pathStr) {
   try {
     const snap = await get(ref(firebaseRTDB, pathStr));
-    if (snap.exists()) return snap.val();
+    if (snap.exists()) {
+      const val = snap.val();
+      setNestedPath(rtdbMirrorState, pathStr, val);
+      saveRtdbMirrorToDisk();
+      return val;
+    }
   } catch (err) {
-    console.warn(`RTDB Get [${pathStr}] warning:`, err.message);
+    // Fallback to synchronized mirror if RTDB rules restrict direct path read
   }
-  return null;
+  const localVal = getNestedPath(rtdbMirrorState, pathStr);
+  return localVal !== undefined ? localVal : null;
 }
 
 async function rtdbSet(pathStr, val) {
+  const cleanVal = JSON.parse(JSON.stringify(val));
+  setNestedPath(rtdbMirrorState, pathStr, cleanVal);
+  rtdbMirrorState.seeded = true;
+  saveRtdbMirrorToDisk();
+
+  // Sync with shared Cloud Firestore
+  if (serverFirestore && firestoreModules) {
+    try {
+      const parts = String(pathStr).split('/').filter(Boolean);
+      if (parts[0] === 'posts' && parts[1]) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'posts', parts[1]), cleanVal, { merge: true });
+      } else if (parts[0] === 'gallery' && parts[1]) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'gallery', parts[1]), cleanVal, { merge: true });
+      } else if (['about', 'homepage', 'settings'].includes(parts[0]) && parts.length === 1) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'cms', parts[0]), cleanVal, { merge: true });
+      } else if (parts[0] === 'presence' && parts[1]) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'presence', parts[1]), cleanVal, { merge: true });
+      }
+    } catch (fsErr) {}
+  }
+
   try {
-    await set(ref(firebaseRTDB, pathStr), val);
+    await set(ref(firebaseRTDB, pathStr), cleanVal);
     return true;
   } catch (err) {
-    console.warn(`RTDB Set [${pathStr}] warning:`, err.message);
     return false;
   }
 }
 
 async function rtdbUpdate(pathStr, updates) {
+  const cleanUpdates = JSON.parse(JSON.stringify(updates));
+  const existing = getNestedPath(rtdbMirrorState, pathStr);
+  if (existing && typeof existing === 'object') {
+    setNestedPath(rtdbMirrorState, pathStr, { ...existing, ...cleanUpdates });
+  } else {
+    setNestedPath(rtdbMirrorState, pathStr, cleanUpdates);
+  }
+  rtdbMirrorState.seeded = true;
+  saveRtdbMirrorToDisk();
+
+  if (serverFirestore && firestoreModules) {
+    try {
+      const parts = String(pathStr).split('/').filter(Boolean);
+      if (parts[0] === 'posts' && parts[1]) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'posts', parts[1]), cleanUpdates, { merge: true });
+      } else if (parts[0] === 'gallery' && parts[1]) {
+        await firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'gallery', parts[1]), cleanUpdates, { merge: true });
+      }
+    } catch (fsErr) {}
+  }
+
   try {
-    await update(ref(firebaseRTDB, pathStr), updates);
+    await update(ref(firebaseRTDB, pathStr), cleanUpdates);
     return true;
   } catch (err) {
-    console.warn(`RTDB Update [${pathStr}] warning:`, err.message);
     return false;
   }
 }
 
 async function rtdbRemove(pathStr) {
+  removeNestedPath(rtdbMirrorState, pathStr);
+  rtdbMirrorState.seeded = true;
+  saveRtdbMirrorToDisk();
+
+  const parts = String(pathStr).split('/').filter(Boolean);
+  if (parts[0] === 'posts' && parts[1]) {
+    deletedPostIds.add(parts[1]);
+  }
+
+  if (serverFirestore && firestoreModules) {
+    try {
+      if (parts[0] === 'posts' && parts[1]) {
+        await firestoreModules.deleteDoc(firestoreModules.doc(serverFirestore, 'posts', parts[1]));
+      } else if (parts[0] === 'gallery' && parts[1]) {
+        await firestoreModules.deleteDoc(firestoreModules.doc(serverFirestore, 'gallery', parts[1]));
+      }
+    } catch (fsErr) {}
+  }
+
   try {
     await remove(ref(firebaseRTDB, pathStr));
     return true;
   } catch (err) {
-    console.warn(`RTDB Remove [${pathStr}] warning:`, err.message);
     return false;
   }
 }
 
-async function initFirebaseRTDB() {
-  console.log('Initializing Firebase Realtime Database (https://shipu-ai-default-rtdb.firebaseio.com)...');
-  try {
-    // 1. Sync & Seed Posts
-    const rtdbPosts = await rtdbGet('posts');
-    if (rtdbPosts && typeof rtdbPosts === 'object') {
-      const arr = Array.isArray(rtdbPosts) ? rtdbPosts : Object.values(rtdbPosts);
-      if (arr.length > 0) {
-        inMemoryPosts = arr.filter(Boolean).map((p, i) => ({
-          ...p,
-          _id: p._id || p.id || `post-${i + 1}`,
-          createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
-          updatedAt: p.updatedAt ? new Date(p.updatedAt) : new Date()
-        }));
-      } else {
-        await seedInitialPostsToRTDB();
-      }
-    } else {
-      await seedInitialPostsToRTDB();
+async function syncGalleryToRTDB() {
+  const galleryMap = {};
+  inMemoryGallery.forEach(g => {
+    const id = String(g._id || g.id);
+    galleryMap[id] = { ...g, _id: id, id };
+  });
+  rtdbMirrorState.gallery = JSON.parse(JSON.stringify(galleryMap));
+  rtdbMirrorState.seeded = true;
+  saveRtdbMirrorToDisk();
+  if (serverFirestore && firestoreModules) {
+    for (const [id, item] of Object.entries(rtdbMirrorState.gallery)) {
+      firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'gallery', id), item, { merge: true }).catch(() => {});
     }
+  }
+  try {
+    await set(ref(firebaseRTDB, 'gallery'), JSON.parse(JSON.stringify(galleryMap)));
+  } catch (err) {}
+}
+
+async function syncPostsToRTDB() {
+  inMemoryPosts = inMemoryPosts.filter(p => !isMockPost(p));
+  const postsMap = {};
+  inMemoryPosts.forEach(p => {
+    const id = String(p._id || p.id);
+    postsMap[id] = { ...p, _id: id, id };
+  });
+  rtdbMirrorState.posts = JSON.parse(JSON.stringify(postsMap));
+  rtdbMirrorState.seeded = true;
+  saveRtdbMirrorToDisk();
+  invalidateHomeCache();
+  if (serverFirestore && firestoreModules) {
+    for (const [id, item] of Object.entries(rtdbMirrorState.posts)) {
+      firestoreModules.setDoc(firestoreModules.doc(serverFirestore, 'posts', id), item, { merge: true }).catch(() => {});
+    }
+  }
+  try {
+    await set(ref(firebaseRTDB, 'posts'), JSON.parse(JSON.stringify(postsMap)));
+  } catch (err) {}
+}
+
+let isSyncingProdPosts = false;
+async function syncLiveProductionPosts() {
+  if (isSyncingProdPosts) return;
+  isSyncingProdPosts = true;
+  try {
+    const listRes = await fetch('https://chitron.iam.bd/api/posts?limit=100').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (listRes && Array.isArray(listRes.posts)) {
+      let addedOrUpdated = false;
+      for (const summary of listRes.posts) {
+        if (!summary || isMockPost(summary)) continue;
+        const pid = String(summary._id || summary.id || '');
+        if (!pid || deletedPostIds.has(pid)) continue;
+
+        const existing = inMemoryPosts.find(p => String(p._id || p.id) === pid || p.slug === summary.slug);
+        if (!existing || !existing.content) {
+          const detailRes = await fetch(`https://chitron.iam.bd/api/posts/${encodeURIComponent(summary.slug)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+          const fullPost = (detailRes && (detailRes.post || detailRes)) || summary;
+          if (fullPost && !isMockPost(fullPost)) {
+            const normalized = {
+              ...fullPost,
+              _id: String(fullPost._id || fullPost.id || pid),
+              id: String(fullPost._id || fullPost.id || pid),
+              status: fullPost.status || 'published',
+              createdAt: fullPost.createdAt || fullPost.publishedAt || new Date().toISOString(),
+              updatedAt: fullPost.updatedAt || fullPost.publishedAt || new Date().toISOString()
+            };
+            const idx = inMemoryPosts.findIndex(p => String(p._id || p.id) === normalized._id || p.slug === normalized.slug);
+            if (idx !== -1) {
+              inMemoryPosts[idx] = normalized;
+            } else {
+              inMemoryPosts.push(normalized);
+            }
+            addedOrUpdated = true;
+
+            if (normalized.coverImage && normalized.coverImage.startsWith('/uploads/')) {
+              const localCover = path.join(__dirname, decodeURIComponent(normalized.coverImage).replace(/^\/+/, ''));
+              if (!fs.existsSync(localCover)) {
+                fetch(`https://chitron.iam.bd${normalized.coverImage}`).then(async r => {
+                  if (r.ok) {
+                    const buf = Buffer.from(await r.arrayBuffer());
+                    fs.mkdirSync(path.dirname(localCover), { recursive: true });
+                    fs.writeFileSync(localCover, buf);
+                  }
+                }).catch(() => {});
+              }
+            }
+          }
+        }
+      }
+      if (addedOrUpdated) {
+        await syncPostsToRTDB();
+      }
+    }
+  } catch (e) {
+    // Non-blocking production sync
+  } finally {
+    isSyncingProdPosts = false;
+  }
+}
+
+async function initFirebaseRTDB() {
+  console.log('Initializing Cloud Firestore & Realtime Sync...');
+  const hadMirror = loadRtdbMirrorFromDisk();
+
+  try {
+    // 1. Load Posts from Cloud Firestore (Primary Shared Database)
+    let loadedFromFirestore = false;
+    if (serverFirestore && firestoreModules) {
+      try {
+        const fsSnap = await firestoreModules.getDocs(firestoreModules.collection(serverFirestore, 'posts'));
+        const fsPosts = [];
+        fsSnap.forEach(d => {
+          const data = d.data();
+          if (data && !isMockPost(data)) {
+            fsPosts.push({
+              ...data,
+              _id: String(data._id || data.id || d.id),
+              id: String(data._id || data.id || d.id)
+            });
+          }
+        });
+        if (fsPosts.length > 0) {
+          inMemoryPosts = fsPosts;
+          loadedFromFirestore = true;
+        }
+      } catch (e) {}
+    }
+
+    if (!loadedFromFirestore && hadMirror && rtdbMirrorState.posts) {
+      inMemoryPosts = Object.values(rtdbMirrorState.posts).filter(p => p && !isMockPost(p));
+    }
+
+    // Remove any mock posts and sync live articles from chitron.iam.bd
+    inMemoryPosts = inMemoryPosts.filter(p => !isMockPost(p));
+    await syncLiveProductionPosts();
+    await syncPostsToRTDB();
+
+    // Attach Real-Time Cloud Firestore Listeners so Production & Preview stay synced live
+    if (serverFirestore && firestoreModules) {
+      try {
+        firestoreModules.onSnapshot(
+          firestoreModules.collection(serverFirestore, 'posts'),
+          (snap) => {
+            const livePosts = [];
+            snap.forEach(docSnap => {
+              const p = docSnap.data();
+              if (p && !isMockPost(p) && !deletedPostIds.has(docSnap.id)) {
+                livePosts.push({
+                  ...p,
+                  _id: String(p._id || p.id || docSnap.id),
+                  id: String(p._id || p.id || docSnap.id)
+                });
+              }
+            });
+            if (livePosts.length > 0 || snap.empty) {
+              inMemoryPosts = livePosts;
+              const postsMap = {};
+              inMemoryPosts.forEach(p => { postsMap[p._id] = p; });
+              rtdbMirrorState.posts = postsMap;
+              saveRtdbMirrorToDisk();
+              invalidateHomeCache();
+            }
+          },
+          () => {}
+        );
+
+        firestoreModules.onSnapshot(
+          firestoreModules.collection(serverFirestore, 'gallery'),
+          (snap) => {
+            if (snap.empty) return;
+            const liveGallery = [];
+            snap.forEach(docSnap => {
+              const g = docSnap.data();
+              if (g && (g.url || g.title)) {
+                liveGallery.push({
+                  ...g,
+                  _id: String(g._id || g.id || docSnap.id),
+                  id: String(g._id || g.id || docSnap.id)
+                });
+              }
+            });
+            if (liveGallery.length > 0) {
+              inMemoryGallery = liveGallery;
+              const galleryMap = {};
+              inMemoryGallery.forEach(g => { galleryMap[g._id] = g; });
+              rtdbMirrorState.gallery = galleryMap;
+              saveRtdbMirrorToDisk();
+            }
+          },
+          () => {}
+        );
+      } catch (e) {}
+    }
+
+    // Periodic background sync with chitron.iam.bd (every 30s)
+    setInterval(() => {
+      syncLiveProductionPosts();
+    }, 30000);
 
     // 2. Sync & Seed About
     const rtdbAbout = await rtdbGet('about');
@@ -570,24 +905,38 @@ async function initFirebaseRTDB() {
       await rtdbSet('settings', initialSettings);
     }
 
-    // 5. Sync & Seed Gallery
+    // 5. Sync & Seed Gallery (respecting deleted/unpublished items if already seeded)
     const rtdbGallery = await rtdbGet('gallery');
-    if (rtdbGallery && typeof rtdbGallery === 'object') {
+    if (rtdbGallery && typeof rtdbGallery === 'object' && Object.keys(rtdbGallery).length > 0) {
       const arr = Array.isArray(rtdbGallery) ? rtdbGallery : Object.values(rtdbGallery);
-      if (arr.length > 0) {
-        inMemoryGallery = arr.filter(Boolean).map((g, i) => ({
-          ...g,
-          _id: g._id || g.id || `photo-${i + 1}`,
-          date: g.date ? new Date(g.date) : new Date()
-        }));
-      } else {
-        await seedInitialGalleryToRTDB();
-      }
+      inMemoryGallery = arr.filter(Boolean).map((g, i) => ({
+        ...g,
+        _id: String(g._id || g.id || `photo-${i + 1}`),
+        id: String(g._id || g.id || `photo-${i + 1}`),
+        date: g.date ? new Date(g.date).toISOString() : new Date().toISOString()
+      }));
+      await syncGalleryToRTDB();
+    } else if (hadMirror && rtdbMirrorState.seeded && rtdbMirrorState.gallery) {
+      inMemoryGallery = Object.values(rtdbMirrorState.gallery).filter(Boolean);
+      await syncGalleryToRTDB();
     } else {
       await seedInitialGalleryToRTDB();
     }
 
-    console.log('Firebase Realtime Database initialized and articles migrated successfully.');
+    // 6. Sync Admin Presence
+    const rtdbPresence = await rtdbGet('presence/admin');
+    if (rtdbPresence && typeof rtdbPresence === 'object' && rtdbPresence.adminLastSeen) {
+      const lastSeen = Number(rtdbPresence.adminLastSeen) || (Date.now() - 12 * 60 * 1000);
+      const isStillRecent = Boolean(rtdbPresence.adminOnline && (Date.now() - lastSeen < 45000));
+      adminPresenceState = {
+        adminOnline: isStillRecent,
+        adminLastSeen: lastSeen
+      };
+    } else {
+      await rtdbSet('presence/admin', adminPresenceState);
+    }
+
+    console.log('Firebase Realtime Database initialized and synced successfully.');
   } catch (seedErr) {
     console.error('Error during Firebase RTDB seed check:', seedErr.message);
   }
@@ -597,20 +946,34 @@ async function seedInitialPostsToRTDB() {
   const postsMap = {};
   initialPosts.forEach((p, i) => {
     const id = `post-${i + 1}`;
-    postsMap[id] = { ...p, _id: id, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    postsMap[id] = {
+      ...p,
+      _id: id,
+      id,
+      publishedAt: (p.publishedAt || new Date()).toISOString(),
+      createdAt: (p.publishedAt || new Date()).toISOString(),
+      updatedAt: (p.publishedAt || new Date()).toISOString()
+    };
   });
-  await rtdbSet('posts', postsMap);
   inMemoryPosts = Object.values(postsMap);
+  await syncPostsToRTDB();
 }
 
 async function seedInitialGalleryToRTDB() {
   const galleryMap = {};
   initialGallery.forEach((g, i) => {
     const id = `photo-${i + 1}`;
-    galleryMap[id] = { ...g, _id: id, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    galleryMap[id] = {
+      ...g,
+      _id: id,
+      id,
+      date: (g.date || new Date()).toISOString(),
+      createdAt: (g.date || new Date()).toISOString(),
+      updatedAt: (g.date || new Date()).toISOString()
+    };
   });
-  await rtdbSet('gallery', galleryMap);
   inMemoryGallery = Object.values(galleryMap);
+  await syncGalleryToRTDB();
 }
 
 // Start Firebase RTDB Sync
@@ -642,6 +1005,7 @@ function calcReadingTime(content) {
 function authMiddleware(req, res, next) {
   // Check standard express session
   if (req.session && req.session.isAdmin) {
+    touchAdminActivity(true);
     return next();
   }
   // Check Authorization header or query token for iframe/cross-site support
@@ -651,6 +1015,7 @@ function authMiddleware(req, res, next) {
     if (req.session) {
       req.session.isAdmin = true;
     }
+    touchAdminActivity(true);
     return next();
   }
   return res.status(401).json({ error: 'Unauthorized' });
@@ -663,7 +1028,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     configuration: 'loaded',
-    storage: (isMongoConnected || mongoose.connection.readyState === 1) ? 'mongodb' : 'in-memory',
+    storage: 'firebase-rtdb',
+    databaseURL: firebaseConfig.databaseURL,
     timestamp: new Date().toISOString()
   });
 });
@@ -680,6 +1046,7 @@ app.post('/api/auth/login', (req, res) => {
 
   if (validPins.includes(cleanPin)) {
     const token = generateAuthToken();
+    touchAdminActivity(true, true);
     if (req.session) {
       req.session.isAdmin = true;
       req.session.adminToken = token;
@@ -700,6 +1067,7 @@ app.post('/api/auth/logout', (req, res) => {
     const clean = String(authHeader).replace(/^Bearer\s+/i, '').trim();
     activeTokens.delete(clean);
   }
+  touchAdminActivity(false, true);
   if (req.session) {
     if (req.session.adminToken) activeTokens.delete(req.session.adminToken);
     req.session.destroy(() => {
@@ -851,6 +1219,7 @@ app.get('/api/about', (req, res) => {
 /* --- Public Gallery Endpoints --- */
 app.get('/api/gallery', async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const { category, search, page = 1, limit = 24, sort = 'newest' } = req.query;
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 24);
@@ -1017,13 +1386,14 @@ app.post('/api/admin/posts/preview', authMiddleware, async (req, res) => {
 
 app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) => {
   try {
-    const { field, title, content, category, excerpt, labels } = req.body;
-    if (!title || !title.trim()) {
-      return res.status(400).json({ error: 'Title is required' });
+    const { field, title = '', content = '', category = '', excerpt = '', labels } = req.body;
+    const cleanContent = String(content || '').replace(/<[^>]*>/g, '').trim();
+    if ((!title || !title.trim()) && !cleanContent) {
+      return res.status(400).json({ error: 'Content or title is required' });
     }
 
     if (field === 'excerpt') {
-      const generated = await editorialService.generateExcerpt(title, content);
+      const generated = await editorialService.generateExcerpt(title, content, { category });
       return res.json({ value: generated, source: 'generated' });
     } else if (field === 'tags') {
       const generated = await editorialService.generateTags(title, excerpt, content, category);
@@ -1031,11 +1401,10 @@ app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) =
     } else if (field === 'featuredImage') {
       const query = await editorialService.extractSearchKeywords(title, content, category);
       const stock = await editorialService.searchStockImage(query, category);
-      if (stock) {
-        const imgUrl = await editorialService.createFeaturedImage(stock, title, 'Chitron Bhattacharjee', generateSlug(title));
+      if (stock && stock.url) {
         return res.json({
-          value: imgUrl,
-          source: 'stock',
+          value: stock.url,
+          source: 'pollinations',
           metadata: {
             provider: stock.provider,
             providerImageId: stock.providerImageId,
@@ -1046,7 +1415,7 @@ app.post('/api/admin/posts/regenerate-field', authMiddleware, async (req, res) =
           }
         });
       }
-      return res.status(404).json({ error: 'No stock image found' });
+      return res.status(404).json({ error: 'Failed to generate image URL' });
     }
     res.status(400).json({ error: 'Invalid field specified' });
   } catch (err) {
@@ -1145,7 +1514,8 @@ app.post('/api/admin/posts', authMiddleware, async (req, res) => {
       }
 
       inMemoryPosts.unshift(postData);
-      rtdbSet(`posts/${postData._id}`, postData);
+      await rtdbSet(`posts/${postData._id}`, postData);
+      await syncPostsToRTDB();
 
       return res.status(201).json({ post: postData });
     } catch (err) {
@@ -1248,7 +1618,8 @@ app.put('/api/admin/posts/:id', authMiddleware, async (req, res) => {
     }
 
     post.updatedAt = now.toISOString();
-    rtdbSet(`posts/${post._id}`, post);
+    await rtdbSet(`posts/${post._id}`, post);
+    await syncPostsToRTDB();
     res.json({ post });
   } catch (err) {
     console.error('Error updating post:', err);
@@ -1262,7 +1633,8 @@ app.delete('/api/admin/posts/:id', authMiddleware, async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'trashed';
     post.updatedAt = new Date().toISOString();
-    rtdbSet(`posts/${post._id}`, post);
+    await rtdbSet(`posts/${post._id}`, post);
+    await syncPostsToRTDB();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to trash post' });
@@ -1276,7 +1648,8 @@ app.post('/api/admin/posts/:id/publish', authMiddleware, async (req, res) => {
     post.status = 'published';
     post.publishedAt = new Date().toISOString();
     post.updatedAt = new Date().toISOString();
-    rtdbSet(`posts/${post._id}`, post);
+    await rtdbSet(`posts/${post._id}`, post);
+    await syncPostsToRTDB();
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to publish' });
@@ -1289,7 +1662,8 @@ app.post('/api/admin/posts/:id/unpublish', authMiddleware, async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'draft';
     post.updatedAt = new Date().toISOString();
-    rtdbSet(`posts/${post._id}`, post);
+    await rtdbSet(`posts/${post._id}`, post);
+    await syncPostsToRTDB();
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to unpublish' });
@@ -1302,7 +1676,8 @@ app.post('/api/admin/posts/:id/restore', authMiddleware, async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Post not found' });
     post.status = 'draft';
     post.updatedAt = new Date().toISOString();
-    rtdbSet(`posts/${post._id}`, post);
+    await rtdbSet(`posts/${post._id}`, post);
+    await syncPostsToRTDB();
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: 'Failed to restore' });
@@ -1314,7 +1689,8 @@ app.delete('/api/admin/posts/:id/permanent', authMiddleware, async (req, res) =>
     const idx = inMemoryPosts.findIndex(p => String(p._id) === String(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Post not found' });
     const [deletedPost] = inMemoryPosts.splice(idx, 1);
-    rtdbRemove(`posts/${deletedPost._id}`);
+    await rtdbRemove(`posts/${deletedPost._id}`);
+    await syncPostsToRTDB();
     inMemoryRevisions = inMemoryRevisions.filter(r => String(r.postId) !== String(req.params.id));
     res.json({ success: true });
   } catch (err) {
@@ -1341,7 +1717,8 @@ app.post('/api/admin/posts/:id/duplicate', authMiddleware, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
     inMemoryPosts.unshift(dup);
-    rtdbSet(`posts/${newId}`, dup);
+    await rtdbSet(`posts/${newId}`, dup);
+    await syncPostsToRTDB();
     res.status(201).json({ post: dup });
   } catch (err) {
     res.status(500).json({ error: 'Failed to duplicate post' });
@@ -1462,6 +1839,7 @@ app.put('/api/admin/content/about', authMiddleware, async (req, res) => {
 /* --- Admin Gallery Endpoints --- */
 app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const { search, status, category, page = 1, limit = 50 } = req.query;
     const pNum = Math.max(1, parseInt(page) || 1);
     const lNum = Math.max(1, parseInt(limit) || 50);
@@ -1487,10 +1865,16 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
     const total = list.length;
     const paginated = list.slice((pNum - 1) * lNum, pNum * lNum);
     const categories = Array.from(new Set(inMemoryGallery.map(p => p.category).filter(Boolean)));
+    const totalAll = inMemoryGallery.length;
+    const publishedCount = inMemoryGallery.filter(p => p.status === 'published').length;
+    const draftCount = inMemoryGallery.filter(p => p.status === 'draft').length;
 
     res.json({
       photos: paginated,
       total,
+      totalAll,
+      publishedCount,
+      draftCount,
       page: pNum,
       totalPages: Math.ceil(total / lNum) || 1,
       categories
@@ -1503,8 +1887,9 @@ app.get('/api/admin/gallery', authMiddleware, async (req, res) => {
 
 app.get('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const { id } = req.params;
-    const photo = inMemoryGallery.find(p => String(p._id) === String(id));
+    const photo = inMemoryGallery.find(p => String(p._id) === String(id) || String(p.id) === String(id));
     if (!photo) return res.status(404).json({ error: 'Photo not found' });
     res.json({ photo });
   } catch (err) {
@@ -1560,7 +1945,11 @@ app.post('/api/admin/gallery', authMiddleware, (req, res, next) => {
       parsedTags = tags.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean);
     }
 
-    const photoData = {
+    const nowIso = new Date().toISOString();
+    const newId = `photo-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newPhoto = {
+      _id: newId,
+      id: newId,
       title: title.trim(),
       caption: (caption || '').trim(),
       url: url.trim(),
@@ -1568,25 +1957,18 @@ app.post('/api/admin/gallery', authMiddleware, (req, res, next) => {
       tags: parsedTags,
       location: (location || '').trim(),
       alt: (alt || title).trim(),
-      date: date ? new Date(date) : new Date(),
+      date: date ? new Date(date).toISOString() : nowIso,
       featured: featured === true || featured === 'true' || featured === '1',
       status: (status === 'draft') ? 'draft' : 'published',
-      order: parseInt(order) || 0
+      order: parseInt(order) || 0,
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
 
-    if (await isDbConnected()) {
-      const created = await GalleryItem.create(photoData);
-      inMemoryGallery.unshift(created.toObject());
-      return res.status(201).json({ success: true, photo: created });
-    }
-
-    const newPhoto = {
-      ...photoData,
-      _id: `mem-photo-${Date.now()}`,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
     inMemoryGallery.unshift(newPhoto);
+    await rtdbSet(`gallery/${newId}`, newPhoto);
+    await syncGalleryToRTDB();
+
     res.status(201).json({ success: true, photo: newPhoto });
   } catch (err) {
     console.error('Error creating gallery photo:', err);
@@ -1626,23 +2008,20 @@ app.put('/api/admin/gallery/:id', authMiddleware, (req, res, next) => {
     if (parsedTags !== undefined) updates.tags = parsedTags;
     if (location !== undefined) updates.location = location.trim();
     if (alt !== undefined) updates.alt = alt.trim();
-    if (date !== undefined) updates.date = new Date(date);
+    if (date !== undefined) updates.date = new Date(date).toISOString();
     if (featured !== undefined) updates.featured = featured === true || featured === 'true' || featured === '1';
     if (status !== undefined) updates.status = (status === 'draft') ? 'draft' : 'published';
     if (order !== undefined) updates.order = parseInt(order) || 0;
-    updates.updatedAt = new Date();
+    updates.updatedAt = new Date().toISOString();
 
-    if (await isDbConnected()) {
-      const updated = await GalleryItem.findByIdAndUpdate(id, { $set: updates }, { new: true });
-      if (!updated) return res.status(404).json({ error: 'Photo not found' });
-      const idx = inMemoryGallery.findIndex(p => String(p._id) === String(id));
-      if (idx !== -1) inMemoryGallery[idx] = updated.toObject();
-      return res.json({ success: true, photo: updated });
-    }
-
-    const idx = inMemoryGallery.findIndex(p => p._id === id);
+    const idx = inMemoryGallery.findIndex(p => String(p._id) === String(id) || String(p.id) === String(id));
     if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
-    inMemoryGallery[idx] = { ...inMemoryGallery[idx], ...updates };
+
+    const photoId = String(inMemoryGallery[idx]._id || id);
+    inMemoryGallery[idx] = { ...inMemoryGallery[idx], ...updates, _id: photoId, id: photoId };
+    await rtdbSet(`gallery/${photoId}`, inMemoryGallery[idx]);
+    await syncGalleryToRTDB();
+
     res.json({ success: true, photo: inMemoryGallery[idx] });
   } catch (err) {
     console.error('Error updating gallery photo:', err);
@@ -1654,20 +2033,16 @@ app.put('/api/admin/gallery/:id', authMiddleware, (req, res, next) => {
 app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    let photoUrl = '';
+    const idx = inMemoryGallery.findIndex(p => String(p._id) === String(id) || String(p.id) === String(id));
+    if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
 
-    if (await isDbConnected()) {
-      const photo = await GalleryItem.findById(id);
-      if (!photo) return res.status(404).json({ error: 'Photo not found' });
-      photoUrl = photo.url;
-      await GalleryItem.findByIdAndDelete(id);
-      inMemoryGallery = inMemoryGallery.filter(p => String(p._id) !== String(id));
-    } else {
-      const idx = inMemoryGallery.findIndex(p => p._id === id);
-      if (idx === -1) return res.status(404).json({ error: 'Photo not found' });
-      photoUrl = inMemoryGallery[idx].url;
-      inMemoryGallery.splice(idx, 1);
-    }
+    const removedPhoto = inMemoryGallery[idx];
+    const photoUrl = removedPhoto.url;
+    const photoId = String(removedPhoto._id || id);
+
+    inMemoryGallery.splice(idx, 1);
+    await rtdbRemove(`gallery/${photoId}`);
+    await syncGalleryToRTDB();
 
     // If local file in uploads/gallery, remove it cleanly
     if (photoUrl && photoUrl.startsWith('/uploads/gallery/')) {
@@ -1677,7 +2052,7 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Photo deleted successfully' });
+    res.json({ success: true, id: photoId, message: 'Photo deleted successfully' });
   } catch (err) {
     console.error('Error deleting gallery photo:', err);
     res.status(500).json({ error: 'Failed to delete photo' });
@@ -1688,18 +2063,18 @@ app.delete('/api/admin/gallery/:id', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (await isDbConnected()) {
-      const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'published', updatedAt: new Date() } }, { new: true });
-      const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
-      if (inMem) inMem.status = 'published';
-      return res.json({ success: true, photo });
-    }
-    const p = inMemoryGallery.find(item => item._id === id);
+    const p = inMemoryGallery.find(item => String(item._id) === String(id) || String(item.id) === String(id));
     if (!p) return res.status(404).json({ error: 'Photo not found' });
+
+    const photoId = String(p._id || id);
     p.status = 'published';
-    p.updatedAt = new Date();
+    p.updatedAt = new Date().toISOString();
+    await rtdbSet(`gallery/${photoId}`, p);
+    await syncGalleryToRTDB();
+
     res.json({ success: true, photo: p });
   } catch (err) {
+    console.error('Error publishing gallery photo:', err);
     res.status(500).json({ error: 'Failed to publish photo' });
   }
 });
@@ -1707,18 +2082,18 @@ app.post('/api/admin/gallery/:id/publish', authMiddleware, async (req, res) => {
 app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    if (await isDbConnected()) {
-      const photo = await GalleryItem.findByIdAndUpdate(id, { $set: { status: 'draft', updatedAt: new Date() } }, { new: true });
-      const inMem = inMemoryGallery.find(p => String(p._id) === String(id));
-      if (inMem) inMem.status = 'draft';
-      return res.json({ success: true, photo });
-    }
-    const p = inMemoryGallery.find(item => item._id === id);
+    const p = inMemoryGallery.find(item => String(item._id) === String(id) || String(item.id) === String(id));
     if (!p) return res.status(404).json({ error: 'Photo not found' });
+
+    const photoId = String(p._id || id);
     p.status = 'draft';
-    p.updatedAt = new Date();
+    p.updatedAt = new Date().toISOString();
+    await rtdbSet(`gallery/${photoId}`, p);
+    await syncGalleryToRTDB();
+
     res.json({ success: true, photo: p });
   } catch (err) {
+    console.error('Error unpublishing gallery photo:', err);
     res.status(500).json({ error: 'Failed to unpublish photo' });
   }
 });
@@ -1759,41 +2134,10 @@ const chatUpload = multer({
   }
 });
 
-// Load Firebase Applet Configuration
-let firebaseAppletConfig = {};
-try {
-  const cfgPath = path.join(__dirname, 'firebase-applet-config.json');
-  if (fs.existsSync(cfgPath)) {
-    firebaseAppletConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  }
-} catch (e) {
-  console.warn('Could not read firebase-applet-config.json:', e.message);
-}
-
+// Firebase Applet Config already initialized at top of server.js
 if (process.env.FIREBASE_DATABASE_URL && !firebaseAppletConfig.databaseURL) {
   firebaseAppletConfig.databaseURL = process.env.FIREBASE_DATABASE_URL;
 }
-
-// Server-side Firebase Firestore client for dual-persistence synchronization
-let serverFirestore = null;
-let firestoreModules = null;
-(async () => {
-  try {
-    if (firebaseAppletConfig && firebaseAppletConfig.apiKey && firebaseAppletConfig.projectId) {
-      const fbApp = require('firebase/app');
-      const fbFirestore = require('firebase/firestore');
-      const appInstance = fbApp.getApps().length > 0
-        ? fbApp.getApp()
-        : fbApp.initializeApp(firebaseAppletConfig);
-      serverFirestore = firebaseAppletConfig.firestoreDatabaseId
-        ? fbFirestore.getFirestore(appInstance, firebaseAppletConfig.firestoreDatabaseId)
-        : fbFirestore.getFirestore(appInstance);
-      firestoreModules = fbFirestore;
-    }
-  } catch (e) {
-    console.warn('Server Firebase initialization warning:', e.message);
-  }
-})();
 
 // In-memory conversation store (synced with MongoDB & Firebase)
 const inMemoryConversations = new Map();
@@ -1949,6 +2293,45 @@ function broadcastToAdmins(payload) {
   }
 }
 
+function broadcastToAllVisitors(payload) {
+  for (const [, set] of visitorSockets.entries()) {
+    for (const ws of set) {
+      sendWsJson(ws, payload);
+    }
+  }
+}
+
+let lastAdminPresencePersistAt = 0;
+function getEffectiveAdminPresence() {
+  const now = Date.now();
+  const isOnline = adminSockets.size > 0 || (Boolean(adminPresenceState.adminOnline) && (now - Number(adminPresenceState.adminLastSeen || 0) < 45000));
+  return {
+    adminOnline: isOnline,
+    adminLastSeen: Number(adminPresenceState.adminLastSeen) || (now - 12 * 60 * 1000)
+  };
+}
+
+function touchAdminActivity(online = true, forceBroadcast = false) {
+  const now = Date.now();
+  const wasOnline = Boolean(adminPresenceState.adminOnline);
+  const nextOnline = Boolean(online);
+  adminPresenceState.adminOnline = nextOnline;
+  adminPresenceState.adminLastSeen = now;
+
+  if (forceBroadcast || wasOnline !== nextOnline || (now - lastAdminPresencePersistAt > 15000)) {
+    lastAdminPresencePersistAt = now;
+    rtdbSet('presence/admin', {
+      adminOnline: nextOnline,
+      adminLastSeen: now
+    });
+    broadcastToAllVisitors({
+      type: 'admin:presence',
+      adminOnline: nextOnline,
+      adminLastSeen: now
+    });
+  }
+}
+
 function summarizeConversation(conv) {
   if (!conv) return null;
   const { messages, ...summary } = conv;
@@ -2081,7 +2464,8 @@ app.get('/api/chat/config', (req, res) => {
   res.json({
     firebaseConfig,
     wsPath: '/ws/chat',
-    realtimeEnabled: true
+    realtimeEnabled: true,
+    adminPresence: getEffectiveAdminPresence()
   });
 });
 
@@ -2092,22 +2476,32 @@ app.get('/api/chat/conversation/:visitorId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid visitor ID format' });
     }
     const conv = await getOrCreateConversation(visitorId, false);
+    const adminPresence = getEffectiveAdminPresence();
     if (!conv) {
       return res.json({
         exists: false,
+        adminPresence,
         conversation: {
           visitorId,
           status: 'active',
           unreadForVisitor: 0,
           unreadForAdmin: 0,
+          adminTyping: false,
+          visitorTyping: false,
           messages: []
         }
       });
     }
+    if (conv.adminTyping && (!conv.adminTypingAt || Date.now() - Number(conv.adminTypingAt) > 4500)) {
+      conv.adminTyping = false;
+    }
+    if (conv.visitorTyping && (!conv.visitorTypingAt || Date.now() - Number(conv.visitorTypingAt) > 4500)) {
+      conv.visitorTyping = false;
+    }
     if (req.query.markRead === '1' || req.query.markRead === 'true') {
       await markConversationRead(visitorId, 'visitor');
     }
-    res.json({ exists: true, conversation: conv });
+    res.json({ exists: true, adminPresence, conversation: conv });
   } catch (err) {
     console.error('Error fetching visitor conversation:', err);
     res.status(500).json({ error: 'Failed to load conversation' });
@@ -2196,11 +2590,14 @@ app.post('/api/chat/conversation/:visitorId/typing', async (req, res) => {
       return res.status(400).json({ error: 'Invalid visitor ID format' });
     }
     const { typing = false, visitorName, visitorEmail, pageUrl } = req.body || {};
+    const isTyping = Boolean(typing);
+    const now = Date.now();
     const conv = await getOrCreateConversation(visitorId, false);
     if (conv) {
-      conv.visitorTyping = Boolean(typing);
+      conv.visitorTyping = isTyping;
+      conv.visitorTypingAt = isTyping ? now : 0;
       conv.visitorOnline = true;
-      conv.visitorLastSeen = Date.now();
+      conv.visitorLastSeen = now;
       if (visitorName !== undefined && String(visitorName).trim()) {
         conv.visitorName = String(visitorName).trim().slice(0, 100);
       }
@@ -2216,7 +2613,8 @@ app.post('/api/chat/conversation/:visitorId/typing', async (req, res) => {
       type: 'typing:update',
       visitorId,
       sender: 'visitor',
-      typing: Boolean(typing),
+      typing: isTyping,
+      typingAt: isTyping ? now : 0,
       visitorName: conv ? conv.visitorName : (visitorName || '')
     });
     res.json({ success: true });
@@ -2338,16 +2736,20 @@ app.post('/api/admin/chat/conversations/:visitorId/typing', authMiddleware, asyn
   try {
     const { visitorId } = req.params;
     const { typing = false } = req.body || {};
+    const isTyping = Boolean(typing);
+    const now = Date.now();
     const conv = await getOrCreateConversation(visitorId, false);
     if (conv) {
-      conv.adminTyping = Boolean(typing);
+      conv.adminTyping = isTyping;
+      conv.adminTypingAt = isTyping ? now : 0;
       await saveConversationState(conv);
     }
     broadcastToVisitor(visitorId, {
       type: 'typing:update',
       visitorId,
       sender: 'admin',
-      typing: Boolean(typing)
+      typing: isTyping,
+      typingAt: isTyping ? now : 0
     });
     res.json({ success: true });
   } catch (err) {
@@ -2397,6 +2799,16 @@ app.delete('/api/admin/chat/conversations/:visitorId', authMiddleware, async (re
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+app.post('/api/admin/chat/presence', (req, res) => {
+  try {
+    const { online = false } = req.body || {};
+    touchAdminActivity(Boolean(online), true);
+    res.json({ success: true, adminPresence: getEffectiveAdminPresence() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update presence' });
   }
 });
 
@@ -2732,6 +3144,7 @@ wss.on('connection', (ws, req) => {
         sendWsJson(ws, {
           type: 'conversation:init',
           visitorId: vid,
+          adminPresence: getEffectiveAdminPresence(),
           conversation: conv || {
             visitorId: vid,
             status: 'active',
@@ -2750,7 +3163,15 @@ wss.on('connection', (ws, req) => {
         }
         clientRole = 'admin';
         adminSockets.add(ws);
+        touchAdminActivity(true, true);
         sendWsJson(ws, { type: 'admin:connected', timestamp: Date.now() });
+        return;
+      }
+
+      if (data.type === 'admin:ping') {
+        if (clientRole === 'admin') {
+          touchAdminActivity(true, false);
+        }
         return;
       }
 
@@ -2807,19 +3228,38 @@ wss.on('connection', (ws, req) => {
 
       // 4. Real-time Typing Indicators
       if (data.type === 'typing:set') {
+        const isTyping = Boolean(data.typing);
+        const now = Date.now();
         if (clientRole === 'visitor' && clientVisitorId) {
+          const conv = await getOrCreateConversation(clientVisitorId, false);
+          if (conv) {
+            conv.visitorTyping = isTyping;
+            conv.visitorTypingAt = isTyping ? now : 0;
+            conv.visitorOnline = true;
+            conv.visitorLastSeen = now;
+            await saveConversationState(conv);
+          }
           broadcastToAdmins({
             type: 'typing:update',
             visitorId: clientVisitorId,
             sender: 'visitor',
-            typing: Boolean(data.typing)
+            typing: isTyping,
+            typingAt: isTyping ? now : 0
           });
         } else if (clientRole === 'admin' && data.visitorId) {
-          broadcastToVisitor(String(data.visitorId), {
+          const targetVid = String(data.visitorId);
+          const conv = await getOrCreateConversation(targetVid, false);
+          if (conv) {
+            conv.adminTyping = isTyping;
+            conv.adminTypingAt = isTyping ? now : 0;
+            await saveConversationState(conv);
+          }
+          broadcastToVisitor(targetVid, {
             type: 'typing:update',
-            visitorId: String(data.visitorId),
+            visitorId: targetVid,
             sender: 'admin',
-            typing: Boolean(data.typing)
+            typing: isTyping,
+            typingAt: isTyping ? now : 0
           });
         }
         return;
@@ -2832,6 +3272,9 @@ wss.on('connection', (ws, req) => {
   ws.on('close', async () => {
     if (clientRole === 'admin') {
       adminSockets.delete(ws);
+      if (adminSockets.size === 0) {
+        touchAdminActivity(false, true);
+      }
     } else if (clientRole === 'visitor' && clientVisitorId) {
       const set = visitorSockets.get(clientVisitorId);
       if (set) {

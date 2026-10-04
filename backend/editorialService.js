@@ -356,282 +356,142 @@ async function generateTags(title, excerpt, content, category, options = {}) {
 }
 
 /* =========================================================
-   3. ARTICLE TOPIC UNDERSTANDING & SEARCH KEYWORDS (OpenRouter + Concept Map)
+   3. ARTICLE CONTENT PROMPT EXTRACTION FOR POLLINATIONS AI
    ========================================================= */
+function buildPollinationsUrl(promptText) {
+  const cleanPrompt = String(promptText || 'editorial minimalist workspace')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/["'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux&width=1280&height=720&nologo=true`;
+}
+
 async function extractSearchKeywords(title, content, category) {
-  const combined = `${title} ${category || ''} ${stripHtml(content).slice(0, 1500)}`;
+  const cleanContent = stripHtml(content || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleanTitle = stripHtml(title || '').trim();
+  const combined = `${cleanContent} ${cleanTitle} ${category || ''}`.trim();
 
-  // Step 1: Try OpenRouter AI for Context-Reading Image Search Terms
+  // Step 1: Try OpenRouter AI to generate a vivid visual prompt from content
   const openRouterKey = (process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_key || '').trim();
-  if (openRouterKey) {
+  if (openRouterKey && combined.length > 0) {
     try {
-      const userPrompt = `Analyze the topic, tone, and visual context of this article (whether written in Bengali or English). Generate 2 to 4 clean, concrete, English stock photo search terms for Pixabay. Focus on physical objects, atmospheric scenes, or subjects suitable for editorial hero photos (e.g. 'vintage writing notebook coffee desk', 'city skyline urban street lights', 'working class factory labor', 'computer code developer workspace'). Output ONLY 3 to 6 English keywords separated by spaces without punctuation or commentary:\n\nTitle: ${title}\nCategory: ${category || ''}\nContent: ${stripHtml(content).slice(0, 1000)}`;
+      const userPrompt = `Read the following article content (written in Bengali or English) and generate a concise, vivid English visual image prompt (6 to 14 words) suitable for Flux AI image generation. Describe the core subject, atmosphere, and editorial photography style without any text or logos in the image. Output ONLY the clean English prompt text without quotes or commentary:\n\nContent: ${cleanContent.slice(0, 2000)}\nTitle: ${cleanTitle}\nCategory: ${category || ''}`;
 
-      const aiKeywords = await callOpenRouter([
-        { role: 'system', content: 'You are a stock photo editor. Output ONLY English space-separated search terms.' },
+      const aiPrompt = await callOpenRouter([
+        { role: 'system', content: 'You are an editorial art director. Output ONLY a single concise English visual image generation prompt.' },
         { role: 'user', content: userPrompt }
-      ], { temperature: 0.3, maxTokens: 60 });
+      ], { temperature: 0.4, maxTokens: 80 });
 
-      const cleanAiKeywords = aiKeywords.replace(/[^\w\s]/g, '').trim().toLowerCase();
-      if (cleanAiKeywords && cleanAiKeywords.length >= 4) {
-        return cleanAiKeywords.slice(0, 80);
+      const cleaned = aiPrompt.replace(/^["']|["']$/g, '').replace(/[^\w\s,-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (cleaned && cleaned.length >= 5) {
+        return cleaned.slice(0, 160);
       }
     } catch (err) {
-      console.warn('[EditorialService] OpenRouter image keyword suggestion fallback:', err.message);
+      console.warn('[EditorialService] OpenRouter image prompt fallback:', err.message);
     }
   }
 
-  // Translation mapping for common Bengali political/economic/social terms to concrete stock keywords
+  // Step 2: Try Gemini AI if configured
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (apiKey && GoogleGenAI && combined.length > 0) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Read this article content and output ONLY a concise English visual image generation prompt (6 to 14 words, editorial photography style, no text in image) capturing the subject and mood:\n\nContent: ${cleanContent.slice(0, 2000)}\nTitle: ${cleanTitle}`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: prompt
+      });
+      const aiText = response.text ? response.text.replace(/^["']|["']$/g, '').replace(/[^\w\s,-]/g, ' ').replace(/\s+/g, ' ').trim() : '';
+      if (aiText && aiText.length >= 5) {
+        return aiText.slice(0, 160);
+      }
+    } catch (err) {
+      console.warn('[EditorialService] Gemini image prompt fallback:', err.message);
+    }
+  }
+
+  // Step 3: Direct content analysis & Bengali/English concept mapping
   const conceptMap = [
-    { regex: /মধ্যবিত্ত|class/i, keywords: 'middle class city workers' },
-    { regex: /শ্রেণি|শ্রমজীবী|labor|worker|কাজ/i, keywords: 'working class people labor' },
-    { regex: /পুঁজিবাদ|অর্থনীতি|capitalism|economy/i, keywords: 'city economy business office' },
-    { regex: /প্রযুক্তি|ai|code|software|কম্পিউটার/i, keywords: 'technology computer workspace' },
-    { regex: /লেখা|বই|writing|books|prose/i, keywords: 'writing desk book study cafe' },
-    { regex: /চিন্তা|ভাবনা|reflection|philosophy/i, keywords: 'calm solitude portrait thinking' },
-    { regex: /সমাজ|রাজনীতি|society|politics/i, keywords: 'urban street people city crowd' }
+    { regex: /মধ্যবিত্ত|class/i, keywords: 'middle class urban life city street editorial photography' },
+    { regex: /শ্রেণি|শ্রমজীবী|labor|worker|কাজ/i, keywords: 'working class people documentary editorial photography' },
+    { regex: /পুঁজিবাদ|অর্থনীতি|capitalism|economy|টাকা|বাজার/i, keywords: 'modern city economy skyline financial district cinematic' },
+    { regex: /প্রযুক্তি|ai|artificial intelligence|code|software|কম্পিউটার|প্রোগ্রামিং|রোবট/i, keywords: 'modern artificial intelligence technology developer workspace glowing screen' },
+    { regex: /লেখা|বই|writing|books|prose|সাহিত্য|কবিতা|ডায়েরি/i, keywords: 'vintage writing desk open book warm coffee lamp light' },
+    { regex: /চিন্তা|ভাবনা|reflection|philosophy|মন|একাকীত্ব|নীরবতা/i, keywords: 'calm contemplative solitude atmospheric window light cinematic' },
+    { regex: /সমাজ|রাজনীতি|society|politics|মানুষ|রাষ্ট্র/i, keywords: 'busy urban street life people atmospheric documentary photo' },
+    { regex: /প্রকৃতি|নদী|আকাশ|বৃষ্টি|রাত|nature|sky|night|rain/i, keywords: 'serene nature twilight landscape dramatic sky reflection' },
+    { regex: /শিক্ষা|বিজ্ঞান|গবেষণা|science|education|research/i, keywords: 'modern research study library desk books warm lighting' }
   ];
 
-  let matchedKeywords = [];
+  const sourceForExtraction = cleanContent || cleanTitle;
+  const matchedConcepts = [];
   for (const item of conceptMap) {
-    if (item.regex.test(combined)) {
-      matchedKeywords.push(item.keywords);
+    if (item.regex.test(sourceForExtraction)) {
+      matchedConcepts.push(item.keywords);
     }
   }
 
-  if (matchedKeywords.length > 0) {
-    return matchedKeywords.join(' ').slice(0, 80);
-  }
-
-  const cleanEng = title.replace(/[^\w\s]/g, '').trim().split(/\s+/).filter(w => w.length > 3).join(' ');
-  return cleanEng || 'editorial writing coffee workspace';
-}
-
-/* =========================================================
-   4. AUTOMATIC STOCK IMAGE SEARCH (Pixabay API + AI Context)
-   ========================================================= */
-async function searchStockImage(searchQuery, category = '') {
-  // Ensure we have clean query string
-  const primaryQuery = (searchQuery || 'writing desk workspace').trim();
-  const pixabayKey = (process.env.PIXABAY_API_KEY || '').trim();
-
-  // Helper to query Pixabay and score results
-  async function queryPixabay(q) {
-    if (!pixabayKey) return null;
-    const pUrl = `https://pixabay.com/api/?key=${encodeURIComponent(pixabayKey)}&q=${encodeURIComponent(q)}&image_type=photo&orientation=horizontal&min_width=1280&per_page=12&safesearch=true`;
-    
-    try {
-      const res = await fetchBuffer(pUrl);
-      const data = JSON.parse(res.toString('utf-8'));
-
-      if (data && data.hits && data.hits.length > 0) {
-        // Score candidates based on aspect ratio, resolution, and community popularity
-        const candidates = data.hits.map(img => {
-          const ratio = (img.imageWidth && img.imageHeight) ? img.imageWidth / img.imageHeight : 1.5;
-          const isLandscape = ratio >= 1.25 && ratio <= 2.2;
-          const score = (isLandscape ? 120 : 0) + (img.likes || 0) + Math.min(60, (img.views || 0) / 100);
-          return {
-            score,
-            url: img.largeImageURL || img.webformatURL,
-            provider: 'pixabay',
-            providerImageId: String(img.id),
-            sourceUrl: img.pageURL,
-            photographer: img.user || 'Pixabay Contributor',
-            photographerUrl: img.user_id ? `https://pixabay.com/users/${img.user}-${img.user_id}/` : 'https://pixabay.com',
-            searchQuery: q
-          };
-        });
-
-        candidates.sort((a, b) => b.score - a.score);
-        return candidates[0] || null;
-      }
-    } catch (err) {
-      console.warn(`[EditorialService] Pixabay search for "${q}" failed:`, err.message);
-    }
-    return null;
-  }
-
-  // Attempt 1: Search using AI contextual query
-  let result = await queryPixabay(primaryQuery);
-  if (result) return result;
-
-  // Attempt 2: Simplified keywords search on Pixabay
-  const simplified = primaryQuery.split(/\s+/).slice(0, 2).join(' ');
-  if (simplified && simplified !== primaryQuery) {
-    result = await queryPixabay(simplified);
-    if (result) return result;
-  }
-
-  // Attempt 3: Category fallback on Pixabay
-  if (category && category.trim()) {
-    result = await queryPixabay(category.trim());
-    if (result) return result;
-  }
-
-  // Attempt 4: General editorial fallback search on Pixabay
-  result = await queryPixabay('workspace writing');
-  if (result) return result;
-
-  // Final fallback curated photos
-  const fallbackCollection = [
-    {
-      url: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80',
-      provider: 'unsplash',
-      providerImageId: 'fallback-writing-desk',
-      sourceUrl: 'https://unsplash.com/photos/writing-desk',
-      photographer: 'Unsplash Community',
-      photographerUrl: 'https://unsplash.com',
-      searchQuery: primaryQuery
-    },
-    {
-      url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
-      provider: 'unsplash',
-      providerImageId: 'fallback-city-architecture',
-      sourceUrl: 'https://unsplash.com',
-      photographer: 'Unsplash Community',
-      photographerUrl: 'https://unsplash.com',
-      searchQuery: primaryQuery
-    }
-  ];
-
-  return fallbackCollection[Math.floor(Math.random() * fallbackCollection.length)];
-}
-
-/* =========================================================
-   5. FEATURED IMAGE CREATION WITH TYPOGRAPHY OVERLAY
-   ========================================================= */
-function wrapText(text, maxCharsPerLine = 28) {
-  if (!text) return [];
-  const words = String(text).trim().split(/\s+/);
-  const lines = [];
-  let currentLine = '';
-
-  for (const word of words) {
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (candidate.length <= maxCharsPerLine) {
-      currentLine = candidate;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-  return lines.slice(0, 4); // Max 4 lines
-}
-
-function escapeXml(unsafe) {
-  return String(unsafe || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhattacharjee', slug = 'post') {
-  if (!stockPhotoObj || !stockPhotoObj.url) {
-    throw new Error('Valid stock photo URL required to generate featured image');
-  }
-
-  // Ensure Kalpurush font is registered in canvas
-  const kalpurushFontPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
-  if (fs.existsSync(kalpurushFontPath)) {
-    try {
-      GlobalFonts.registerFromPath(kalpurushFontPath, 'Kalpurush');
-    } catch (_) {}
-  }
-
-  // 1. Download image buffer
-  const rawImageBuffer = await fetchBuffer(stockPhotoObj.url);
-
-  // 2. Base dimensions: standard 1200x630 (16:9 social share standard)
-  const width = 1200;
-  const height = 630;
-
-  // Resize background stock image with sharp
-  const resizedBgJpg = await sharp(rawImageBuffer)
-    .resize(width, height, { fit: 'cover', position: 'center' })
-    .jpeg({ quality: 90 })
-    .toBuffer();
-
-  const bgImage = await loadImage(resizedBgJpg);
-
-  // 3. Create canvas for Skia/HarfBuzz complex script rendering
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-
-  // Draw background image
-  ctx.drawImage(bgImage, 0, 0, width, height);
-
-  // Draw contrast vignette gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, height);
-  grad.addColorStop(0, 'rgba(9, 10, 15, 0.45)');
-  grad.addColorStop(0.5, 'rgba(9, 10, 15, 0.78)');
-  grad.addColorStop(1, 'rgba(9, 10, 15, 0.95)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-
-  // Detect language
-  const isBengali = isBengaliText(title) || detectLanguage(title) === 'bn';
-  const isAuthorBengali = isBengaliText(author);
-
-  const titleLines = wrapText(title, isBengali ? 26 : 28);
-  const titleFontSize = titleLines.length > 2 ? 40 : 46;
-  const lineHeight = isBengali ? Math.round(titleFontSize * 1.4) : Math.round(titleFontSize * 1.25);
-  const totalTextHeight = titleLines.length * lineHeight;
-  const startY = Math.max(150, Math.floor((height - totalTextHeight) / 2));
-
-  // Editorial Accent Bar (Blue)
-  ctx.fillStyle = '#2563eb';
-  if (ctx.roundRect) {
-    ctx.roundRect(50, startY - 10, 6, totalTextHeight + 10, 3);
-    ctx.fill();
-  } else {
-    ctx.fillRect(50, startY - 10, 6, totalTextHeight + 10);
-  }
-
-  // Draw Title with Kalpurush for Bengali (HarfBuzz shapes ligatures automatically)
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `700 ${titleFontSize}px ${isBengali ? 'Kalpurush' : 'sans-serif'}`;
-  ctx.textBaseline = 'top';
-
-  titleLines.forEach((line, idx) => {
-    ctx.fillText(line, 80, startY + (idx * lineHeight));
-  });
-
-  // Draw Author / Archive Credit
-  const authorY = startY + totalTextHeight + 38;
-  const authorText = isAuthorBengali ? author : author.toUpperCase();
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = `600 22px ${isAuthorBengali || isBengali ? 'Kalpurush' : 'sans-serif'}`;
-  ctx.fillText(`BY ${authorText} · CHITRONS ARCHIVE`, 80, authorY);
-
-  // Draw Photo Credit Tag
-  if (stockPhotoObj.photographer) {
-    const creditText = `Photo: ${stockPhotoObj.photographer} (${stockPhotoObj.provider})`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-    ctx.font = '13px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(creditText, width - 40, height - 25);
-  }
-
-  // 4. Save JPG and WebP files
-  const cleanSlug = String(slug || 'post')
-    .toLowerCase()
-    .replace(/[^\w\u0980-\u09FF-]/g, '')
-    .slice(0, 50);
-  const filename = `featured-${cleanSlug || 'article'}-${Date.now()}.jpg`;
-  const outputPath = path.join(UPLOADS_DIR, filename);
-  const webpPath = outputPath.replace(/\.jpg$/, '.webp');
-
-  const canvasJpgBuffer = canvas.toBuffer('image/jpeg');
-
-  await Promise.all([
-    sharp(canvasJpgBuffer).jpeg({ quality: 88, progressive: true }).toFile(outputPath),
-    sharp(canvasJpgBuffer).webp({ quality: 80 }).toFile(webpPath)
+  // Extract meaningful words from the content itself
+  const stopWords = new Set([
+    'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'in', 'for', 'to', 'of', 'with', 'this', 'that', 'by', 'from', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'but', 'not', 'or', 'as', 'it', 'its', 'into', 'about', 'can', 'will', 'just', 'more', 'some', 'other', 'than', 'then', 'now', 'only', 'very',
+    'এই', 'একটি', 'এবং', 'বা', 'জন্য', 'থেকে', 'করে', 'করা', 'হয়', 'হয়ে', 'হতে', 'তার', 'নিয়ে', 'আছে', 'না', 'কি', 'যে', 'এক', 'কে', 'কোনো', 'কিন্তু', 'যখন', 'তখন', 'বলে', 'মধ্যে', 'সাথে', 'উপর', 'কাছে', 'পারে', 'যায়', 'দেয়'
   ]);
 
-  return `/uploads/featured-images/${filename}`;
+  const contentWords = sourceForExtraction
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .map(w => w.trim())
+    .filter(w => w.length >= 3 && !stopWords.has(w.toLowerCase()))
+    .slice(0, 14);
+
+  if (matchedConcepts.length > 0) {
+    const englishFromContent = contentWords.filter(w => /^[a-zA-Z0-9-]+$/.test(w)).slice(0, 6).join(' ');
+    const promptStr = `${englishFromContent ? englishFromContent + ' ' : ''}${matchedConcepts.slice(0, 2).join(', ')}`.trim();
+    return promptStr.slice(0, 160);
+  }
+
+  if (contentWords.length > 0) {
+    return `${contentWords.join(' ')} editorial photography cinematic lighting`.slice(0, 160);
+  }
+
+  return (cleanTitle || category || 'minimalist editorial writing workspace cinematic lighting').slice(0, 160);
+}
+
+/* =========================================================
+   4. POLLINATIONS AI (FLUX) IMAGE GENERATION
+   ========================================================= */
+async function searchStockImage(searchQuery, category = '') {
+  const promptText = (searchQuery || category || 'editorial writing desk workspace cinematic lighting').trim();
+  const pollinationsUrl = buildPollinationsUrl(promptText);
+
+  return {
+    url: pollinationsUrl,
+    provider: 'pollinations',
+    providerImageId: `flux-${Date.now()}`,
+    sourceUrl: pollinationsUrl,
+    photographer: 'Pollinations AI (Flux)',
+    photographerUrl: 'https://pollinations.ai',
+    searchQuery: promptText
+  };
+}
+
+/* =========================================================
+   5. FEATURED IMAGE URL RESOLUTION (Pollinations AI Direct)
+   ========================================================= */
+async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhattacharjee', slug = 'post') {
+  if (stockPhotoObj && stockPhotoObj.url) {
+    return stockPhotoObj.url;
+  }
+  const fallbackPrompt = await extractSearchKeywords(title, '', '');
+  return buildPollinationsUrl(fallbackPrompt);
 }
 
 /* =========================================================
@@ -694,18 +554,17 @@ async function enrichPostData(postData, automationSettings = {}) {
     result.editorialAutomation.tags = { source: 'manual' };
   }
 
-  // 3. Automatic Featured Image
+  // 3. Automatic Featured Image via Pollinations AI (Flux) from content
   if (!result.coverImage || result.coverImage.trim() === '') {
     if (autoImage) {
       try {
         const searchQuery = await extractSearchKeywords(result.title, result.content, result.category);
         const stockPhoto = await searchStockImage(searchQuery, result.category);
 
-        if (stockPhoto) {
-          const featuredImgUrl = await createFeaturedImage(stockPhoto, result.title, result.author || 'Chitron Bhattacharjee', result.slug || 'post');
-          result.coverImage = featuredImgUrl;
+        if (stockPhoto && stockPhoto.url) {
+          result.coverImage = stockPhoto.url;
           result.editorialAutomation.featuredImage = {
-            source: 'stock',
+            source: 'pollinations',
             provider: stockPhoto.provider,
             providerImageId: stockPhoto.providerImageId,
             sourceUrl: stockPhoto.sourceUrl,
@@ -716,8 +575,7 @@ async function enrichPostData(postData, automationSettings = {}) {
           };
         }
       } catch (err) {
-        console.error('[EditorialService] Stock photo & featured image creation error:', err);
-        // Do NOT fail the post creation if stock photo fails!
+        console.error('[EditorialService] Pollinations image generation error:', err);
       }
     }
   } else if (!result.editorialAutomation.featuredImage.source) {
@@ -732,6 +590,7 @@ module.exports = {
   generateExcerpt,
   generateTags,
   extractSearchKeywords,
+  buildPollinationsUrl,
   searchStockImage,
   createFeaturedImage,
   enrichPostData

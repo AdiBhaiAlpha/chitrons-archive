@@ -2,6 +2,30 @@
   "rules": {
     ".read": false,
     ".write": false,
+    "posts": {
+      ".read": true,
+      ".write": true
+    },
+    "gallery": {
+      ".read": true,
+      ".write": true
+    },
+    "about": {
+      ".read": true,
+      ".write": true
+    },
+    "homepage": {
+      ".read": true,
+      ".write": true
+    },
+    "settings": {
+      ".read": true,
+      ".write": true
+    },
+    "presence": {
+      ".read": true,
+      ".write": true
+    },
     "admins": {
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'chitronbhattacharjee@gmail.com')",

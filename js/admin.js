@@ -16,6 +16,56 @@
   let galleryPhotosCache = [];
   let gallerySearchDebounce = null;
 
+  // Hardcoded Firebase Realtime Database configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyBIuJFn74hJK1LT_Shcl-Y5DMgiOArB8Ps",
+    authDomain: "shipu-ai.firebaseapp.com",
+    databaseURL: "https://shipu-ai-default-rtdb.firebaseio.com",
+    projectId: "shipu-ai",
+    storageBucket: "shipu-ai.firebasestorage.app",
+    messagingSenderId: "953122849300",
+    appId: "1:953122849300:web:f821f1a161ce7879001d01",
+    measurementId: "G-N2WMSS3MNG"
+  };
+
+  let clientRtdb = null;
+  let clientRtdbMod = null;
+
+  async function ensureClientRtdb() {
+    if (clientRtdb && clientRtdbMod) return { db: clientRtdb, mod: clientRtdbMod };
+    try {
+      const fbAppMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js');
+      const fbDbMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js');
+      const app = fbAppMod.getApps().some(a => a.name === 'shipu-rtdb-admin')
+        ? fbAppMod.getApp('shipu-rtdb-admin')
+        : fbAppMod.initializeApp(firebaseConfig, 'shipu-rtdb-admin');
+      clientRtdb = fbDbMod.getDatabase(app, firebaseConfig.databaseURL);
+      clientRtdbMod = fbDbMod;
+      return { db: clientRtdb, mod: clientRtdbMod };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function syncPhotoItemToFirebase(photo) {
+    if (!photo || (!photo._id && !photo.id)) return;
+    try {
+      const rtdb = await ensureClientRtdb();
+      if (!rtdb) return;
+      const id = String(photo._id || photo.id);
+      await rtdb.mod.set(rtdb.mod.ref(rtdb.db, `gallery/${id}`), JSON.parse(JSON.stringify({ ...photo, _id: id, id })));
+    } catch (e) {}
+  }
+
+  async function removePhotoItemFromFirebase(id) {
+    if (!id) return;
+    try {
+      const rtdb = await ensureClientRtdb();
+      if (!rtdb) return;
+      await rtdb.mod.remove(rtdb.mod.ref(rtdb.db, `gallery/${String(id)}`));
+    } catch (e) {}
+  }
+
   /* --- Helpers --- */
   function $(sel) { return document.querySelector(sel); }
   function $$(sel) { return document.querySelectorAll(sel); }
@@ -654,9 +704,13 @@
       updateGalleryCategoryOptions(data.categories || [], category);
 
       // Update Top Stats
-      const total = data.total || galleryPhotosCache.length;
-      const published = galleryPhotosCache.filter(p => p.status === 'published').length;
-      const drafts = galleryPhotosCache.filter(p => p.status === 'draft').length;
+      const total = data.totalAll !== undefined ? data.totalAll : (data.total || galleryPhotosCache.length);
+      const published = data.publishedCount !== undefined
+        ? data.publishedCount
+        : galleryPhotosCache.filter(p => p.status === 'published').length;
+      const drafts = data.draftCount !== undefined
+        ? data.draftCount
+        : galleryPhotosCache.filter(p => p.status === 'draft').length;
       const statsEl = $('#gallery-stat-counts');
       if (statsEl) {
         statsEl.textContent = `${total} photo${total === 1 ? '' : 's'} in database (${published} published, ${drafts} drafts)`;
@@ -852,15 +906,18 @@
     $$('.gallery-action-edit').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.id;
-        const photo = galleryPhotosCache.find(p => p._id === id);
+        const photo = galleryPhotosCache.find(p => String(p._id) === String(id) || String(p.id) === String(id));
         if (photo) openGalleryUploadForm(photo);
       });
     });
 
     $$('.gallery-action-toggle').forEach(btn => {
       btn.addEventListener('click', async (e) => {
-        const id = e.currentTarget.dataset.id;
-        const currentStatus = e.currentTarget.dataset.status;
+        const buttonEl = e.currentTarget;
+        const id = buttonEl.dataset.id;
+        const currentStatus = buttonEl.dataset.status;
+        buttonEl.disabled = true;
+        buttonEl.textContent = currentStatus === 'published' ? 'Unpublishing...' : 'Publishing...';
         await toggleGalleryPhotoStatus(id, currentStatus);
       });
     });
@@ -1138,12 +1195,15 @@
     };
 
     try {
+      let res;
       if (editingGalleryId) {
-        await API.adminUpdateGalleryPhoto(editingGalleryId, payload);
-        toast('Photo updated successfully', 'success');
+        res = await API.adminUpdateGalleryPhoto(editingGalleryId, payload);
+        if (res && res.photo) syncPhotoItemToFirebase(res.photo);
+        toast('Photo updated & synced with Firebase', 'success');
       } else {
-        await API.adminCreateGalleryPhoto(payload);
-        toast('Photo added to gallery', 'success');
+        res = await API.adminCreateGalleryPhoto(payload);
+        if (res && res.photo) syncPhotoItemToFirebase(res.photo);
+        toast('Photo added & synced with Firebase', 'success');
       }
 
       resetGalleryForm();
@@ -1161,16 +1221,20 @@
 
   async function toggleGalleryPhotoStatus(id, currentStatus) {
     try {
+      let res;
       if (currentStatus === 'published') {
-        await API.adminUnpublishGalleryPhoto(id);
-        toast('Photo moved to drafts', 'success');
+        res = await API.adminUnpublishGalleryPhoto(id);
+        if (res && res.photo) syncPhotoItemToFirebase(res.photo);
+        toast('Photo unpublished & moved to drafts', 'success');
       } else {
-        await API.adminPublishGalleryPhoto(id);
+        res = await API.adminPublishGalleryPhoto(id);
+        if (res && res.photo) syncPhotoItemToFirebase(res.photo);
         toast('Photo published to gallery', 'success');
       }
       await loadGallery();
     } catch (err) {
       toast('Failed to change status: ' + (err.message || ''), 'error');
+      await loadGallery();
     }
   }
 
@@ -1180,11 +1244,20 @@
       'Are you sure you want to permanently delete this photo from the database? This action cannot be undone.',
       async () => {
         try {
+          const cardEl = document.getElementById(`admin-gallery-card-${id}`);
+          if (cardEl) {
+            cardEl.style.opacity = '0.4';
+            cardEl.style.pointerEvents = 'none';
+          }
           await API.adminDeleteGalleryPhoto(id);
-          toast('Photo deleted from gallery', 'success');
+          removePhotoItemFromFirebase(id);
+          galleryPhotosCache = galleryPhotosCache.filter(p => String(p._id) !== String(id) && String(p.id) !== String(id));
+          if (cardEl) cardEl.remove();
+          toast('Photo permanently deleted from gallery & Firebase', 'success');
           await loadGallery();
         } catch (err) {
           toast('Failed to delete photo: ' + (err.message || ''), 'error');
+          await loadGallery();
         }
       }
     );
@@ -1396,22 +1469,30 @@
       btnRegenImage.addEventListener('click', async () => {
         const title = $('#editor-title').value.trim();
         const content = $('#editor-content').innerHTML;
+        const plainContent = ($('#editor-content').innerText || $('#editor-content').textContent || '').trim();
         const category = $('#editor-category').value.trim();
-        if (!title) { toast('Enter a title first', 'error'); return; }
+        if (!plainContent && !title) {
+          toast('Enter content or title first', 'error');
+          return;
+        }
         btnRegenImage.disabled = true;
-        btnRegenImage.textContent = 'Searching...';
+        btnRegenImage.textContent = 'Generating...';
         try {
           const res = await API.adminRegenerateField({ field: 'featuredImage', title, content, category });
           if (res && res.value) {
             $('#editor-cover').value = res.value;
             markDirty();
-            toast('Stock photo & cover image created!');
+            toast('AI cover image generated from content!');
           }
         } catch (e) {
-          toast(e.message || 'No stock photo found', 'error');
+          const fallbackPrompt = (plainContent || title).replace(/\s+/g, ' ').trim().slice(0, 150);
+          const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fallbackPrompt)}?model=flux&width=1280&height=720&nologo=true`;
+          $('#editor-cover').value = fallbackUrl;
+          markDirty();
+          toast('AI cover image URL generated from content!');
         } finally {
           btnRegenImage.disabled = false;
-          btnRegenImage.textContent = 'Find Stock Image';
+          btnRegenImage.textContent = 'Generate AI Image';
         }
       });
     }
@@ -1615,6 +1696,7 @@
                 for (const id of ids) {
                   try {
                     await API.adminDeleteGalleryPhoto(id);
+                    removePhotoItemFromFirebase(id);
                     deletedCount++;
                   } catch (e) {
                     console.error('Failed to delete photo ' + id, e);
@@ -1629,13 +1711,19 @@
           );
         } else if (action === 'publish') {
           for (const id of ids) {
-            try { await API.adminPublishGalleryPhoto(id); } catch(e) {}
+            try {
+              const res = await API.adminPublishGalleryPhoto(id);
+              if (res && res.photo) syncPhotoItemToFirebase(res.photo);
+            } catch(e) {}
           }
           toast(`Updated ${ids.length} photo${ids.length === 1 ? '' : 's'} to published`, 'success');
           await loadGallery();
         } else if (action === 'unpublish') {
           for (const id of ids) {
-            try { await API.adminUnpublishGalleryPhoto(id); } catch(e) {}
+            try {
+              const res = await API.adminUnpublishGalleryPhoto(id);
+              if (res && res.photo) syncPhotoItemToFirebase(res.photo);
+            } catch(e) {}
           }
           toast(`Moved ${ids.length} photo${ids.length === 1 ? '' : 's'} to drafts`, 'success');
           await loadGallery();

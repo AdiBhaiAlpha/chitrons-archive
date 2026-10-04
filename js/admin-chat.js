@@ -16,12 +16,17 @@
     searchQuery: '',
     totalUnread: 0,
     visitorTypingMap: {},
+    visitorTypingTimeout: null,
+    adminTypingStopTimer: null,
+    lastAdminTypingSentAt: 0,
+    adminCurrentlyTyping: false,
     ws: null,
     wsReconnectTimer: null,
     pollTimer: null,
     fbApp: null,
     fbAuth: null,
     fbDb: null,
+    fbRtdb: null,
     fbUser: null,
     sending: false
   };
@@ -237,7 +242,12 @@
   // ---- Select & Load Full Conversation Thread ----
   async function selectConversation(visitorId) {
     if (!visitorId) return;
+    if (state.activeVisitorId && state.activeVisitorId !== visitorId && state.adminCurrentlyTyping) {
+      sendAdminTypingSignal(state.activeVisitorId, false);
+    }
     state.activeVisitorId = visitorId;
+    var typingEl = $('#admin-thread-typing');
+    if (typingEl) typingEl.style.display = 'none';
     var shell = $('#admin-messenger-shell');
     if (shell) shell.classList.add('thread-open');
 
@@ -276,7 +286,17 @@
 
     var friendly = FriendlyVisitorName(conv);
     if (nameEl) nameEl.textContent = friendly;
-    if (statusEl) statusEl.textContent = conv.status || 'active';
+    if (statusEl) {
+      var vOnline = Boolean(conv.visitorOnline && (!conv.visitorLastSeen || (Date.now() - Number(conv.visitorLastSeen) < 65000)));
+      if (vOnline) {
+        statusEl.textContent = 'Active now';
+      } else if (conv.visitorLastSeen || conv.lastMessageAt) {
+        var rel = formatRelativeTime(conv.visitorLastSeen || conv.lastMessageAt);
+        statusEl.textContent = rel === 'Just now' ? 'Active 1 min ago' : ('Active ' + rel);
+      } else {
+        statusEl.textContent = conv.status || 'active';
+      }
+    }
     if (avatarEl) avatarEl.textContent = friendly.replace(/^Visitor #/i, '').charAt(0).toUpperCase() || 'V';
     if (metaEl) {
       var metaParts = ['ID: ' + conv.visitorId];
@@ -350,6 +370,7 @@
   // ---- Send Admin Reply ----
   async function handleSendReply(payload) {
     if (!state.activeVisitorId || state.sending) return;
+    notifyAdminTyping(false);
     state.sending = true;
     var sendBtn = $('#admin-chat-send-btn');
     if (sendBtn) sendBtn.disabled = true;
@@ -425,17 +446,51 @@
     } catch (e) {}
   }
 
-  function notifyAdminTyping(isTyping) {
-    if (!state.activeVisitorId) return;
+  function sendAdminTypingSignal(visitorId, isTyping) {
+    if (!visitorId) return;
+    var active = Boolean(isTyping);
+    state.adminCurrentlyTyping = active;
     if (state.ws && state.ws.readyState === WebSocket.OPEN) {
       try {
         state.ws.send(JSON.stringify({
           type: 'typing:set',
-          visitorId: state.activeVisitorId,
-          typing: Boolean(isTyping)
+          visitorId: visitorId,
+          typing: active
         }));
       } catch (e) {}
     }
+    if (window.api && typeof window.api.adminSetTyping === 'function') {
+      window.api.adminSetTyping(visitorId, active).catch(function () {});
+    }
+    if (state.fbRtdb && state.fbRtdb.db && state.fbRtdb.mod) {
+      try {
+        var convRef = state.fbRtdb.mod.ref(state.fbRtdb.db, 'conversations/' + visitorId);
+        state.fbRtdb.mod.update(convRef, {
+          adminTyping: active,
+          adminTypingAt: active ? Date.now() : 0
+        }).catch(function () {});
+      } catch (e) {}
+    }
+  }
+
+  function notifyAdminTyping(isTyping) {
+    if (!state.activeVisitorId) return;
+    clearTimeout(state.adminTypingStopTimer);
+    var targetVisitorId = state.activeVisitorId;
+    if (!isTyping) {
+      if (state.adminCurrentlyTyping) {
+        sendAdminTypingSignal(targetVisitorId, false);
+      }
+      return;
+    }
+    var now = Date.now();
+    if (!state.adminCurrentlyTyping || now - state.lastAdminTypingSentAt > 1400) {
+      state.lastAdminTypingSentAt = now;
+      sendAdminTypingSignal(targetVisitorId, true);
+    }
+    state.adminTypingStopTimer = setTimeout(function () {
+      sendAdminTypingSignal(targetVisitorId, false);
+    }, 2500);
   }
 
   function handleAdminRealtimeEvent(payload) {
@@ -447,6 +502,10 @@
       var conv = payload.conversation;
 
       if (msg && msg.sender === 'visitor') {
+        if (vId === state.activeVisitorId) {
+          var tEl = $('#admin-thread-typing');
+          if (tEl) tEl.style.display = 'none';
+        }
         triggerAdminNotification(conv || { visitorId: vId }, msg);
       }
 
@@ -467,8 +526,14 @@
     } else if ((payload.type === 'typing:update' || payload.type === 'typing') && payload.sender === 'visitor') {
       var typingEl = $('#admin-thread-typing');
       if (payload.visitorId === state.activeVisitorId && typingEl) {
-        var isTyp = payload.typing !== undefined ? payload.typing : payload.isTyping;
+        var isTyp = Boolean(payload.typing !== undefined ? payload.typing : payload.isTyping);
         typingEl.style.display = isTyp ? 'block' : 'none';
+        clearTimeout(state.visitorTypingTimeout);
+        if (isTyp) {
+          state.visitorTypingTimeout = setTimeout(function () {
+            if (typingEl) typingEl.style.display = 'none';
+          }, 3800);
+        }
       }
     } else if (
       payload.type === 'conversation:updated' ||
@@ -499,6 +564,19 @@
       state.fbApp = app;
       state.fbAuth = { auth: auth, mod: fbAuthMod };
       state.fbDb = { db: db, mod: fbFirestoreMod };
+
+      if (cfg.databaseURL) {
+        try {
+          var fbRtdbMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js');
+          var rtdb = fbRtdbMod.getDatabase(app, cfg.databaseURL);
+          state.fbRtdb = { db: rtdb, mod: fbRtdbMod };
+          var presRef = fbRtdbMod.ref(rtdb, 'presence/admin');
+          fbRtdbMod.set(presRef, { adminOnline: true, adminLastSeen: Date.now() }).catch(function () {});
+          if (typeof fbRtdbMod.onDisconnect === 'function') {
+            fbRtdbMod.onDisconnect(presRef).set({ adminOnline: false, adminLastSeen: Date.now() }).catch(function () {});
+          }
+        } catch (e) {}
+      }
 
       fbAuthMod.onAuthStateChanged(auth, async function (user) {
         state.fbUser = user || null;
@@ -757,6 +835,10 @@
         notifyAdminTyping(replyInput.value.trim().length > 0);
       });
 
+      replyInput.addEventListener('blur', function () {
+        notifyAdminTyping(false);
+      });
+
       replyInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -831,6 +913,17 @@
 
     state.pollTimer = setInterval(function () {
       if (document.visibilityState === 'visible') {
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          try {
+            state.ws.send(JSON.stringify({ type: 'admin:ping' }));
+          } catch (e) {}
+        }
+        if (state.fbRtdb && state.fbRtdb.db && state.fbRtdb.mod) {
+          try {
+            var presRef = state.fbRtdb.mod.ref(state.fbRtdb.db, 'presence/admin');
+            state.fbRtdb.mod.set(presRef, { adminOnline: true, adminLastSeen: Date.now() }).catch(function () {});
+          } catch (e) {}
+        }
         loadConversations();
         if (state.activeVisitorId) {
           window.api.adminGetConversation(state.activeVisitorId).then(function (data) {
@@ -846,6 +939,15 @@
         }
       }
     }, 8000);
+
+    window.addEventListener('pagehide', function () {
+      try {
+        if (navigator.sendBeacon) {
+          var blob = new Blob([JSON.stringify({ online: false })], { type: 'application/json' });
+          navigator.sendBeacon('/api/admin/chat/presence', blob);
+        }
+      } catch (e) {}
+    });
   }
 
   function onOpenView() {

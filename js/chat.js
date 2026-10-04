@@ -23,11 +23,15 @@
     visitorName: '',
     isOpen: false,
     isLoading: true,
+    initialHistoryLoaded: false,
+    notifiedMsgIds: {},
     connectionState: 'online', // 'online' | 'reconnecting' | 'offline'
     conversation: null,
     messages: [],
     unreadForVisitor: 0,
     adminTyping: false,
+    adminOnline: false,
+    adminLastSeen: Date.now() - 12 * 60 * 1000,
     sending: false,
     lastSentAt: 0,
     isAtBottom: true,
@@ -38,9 +42,71 @@
     fbRtdb: null,
     fbUnsubConv: null,
     fbUnsubMsgs: null,
+    fbUnsubRtdb: null,
     typingTimeout: null,
+    visitorTypingStopTimer: null,
+    lastVisitorTypingSentAt: 0,
+    visitorCurrentlyTyping: false,
     pollTimer: null
   };
+
+  // ---- Web Audio Chime for Incoming Admin Reply (Matches Admin Notification Sound) ----
+  var sharedAudioCtx = null;
+  function unlockAudioContext() {
+    try {
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!sharedAudioCtx) {
+        sharedAudioCtx = new AudioCtx();
+      }
+      if (sharedAudioCtx.state === 'suspended' && typeof sharedAudioCtx.resume === 'function') {
+        sharedAudioCtx.resume().catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function playMessageReceivedBeep() {
+    try {
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      var ctx = sharedAudioCtx || new AudioCtx();
+      sharedAudioCtx = ctx;
+      var playChime = function () {
+        try {
+          var now = ctx.currentTime;
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, now); // D5
+          osc.frequency.setValueAtTime(880, now + 0.11); // A5
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.37);
+        } catch (err) {}
+      };
+      if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+        ctx.resume().then(playChime).catch(playChime);
+      } else {
+        playChime();
+      }
+    } catch (e) {}
+  }
+
+  function setAdminTypingState(isTyping) {
+    var active = Boolean(isTyping);
+    state.adminTyping = active;
+    clearTimeout(state.typingTimeout);
+    if (active) {
+      state.typingTimeout = setTimeout(function () {
+        state.adminTyping = false;
+        renderTypingIndicator();
+      }, 3800);
+    }
+    renderTypingIndicator();
+  }
 
   function tr(key, fallback) {
     if (window.i18n && typeof window.i18n.t === 'function') {
@@ -158,6 +224,11 @@
         var parsed = JSON.parse(cachedRaw);
         if (parsed && Array.isArray(parsed.messages)) {
           state.messages = parsed.messages;
+          for (var k = 0; k < state.messages.length; k++) {
+            if (state.messages[k] && state.messages[k].messageId) {
+              state.notifiedMsgIds[state.messages[k].messageId] = true;
+            }
+          }
           state.unreadForVisitor = parsed.unreadForVisitor || 0;
           state.isLoading = false;
         }
@@ -207,8 +278,10 @@
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  function mergeMessages(incomingList) {
+  function mergeMessages(incomingList, options) {
     if (!Array.isArray(incomingList)) return false;
+    var opts = options || {};
+    var isInitialSeed = Boolean(opts.isInitialSeed);
     var map = {};
     for (var i = 0; i < state.messages.length; i++) {
       var existing = state.messages[i];
@@ -217,6 +290,7 @@
       }
     }
     var changed = false;
+    var hasNewAdminReply = false;
     for (var j = 0; j < incomingList.length; j++) {
       var msg = incomingList[j];
       if (!msg || !msg.messageId) continue;
@@ -243,6 +317,15 @@
       };
 
       var prev = map[normalized.messageId];
+      var isBrandNew = !prev && !state.notifiedMsgIds[normalized.messageId];
+
+      if (isBrandNew) {
+        state.notifiedMsgIds[normalized.messageId] = true;
+        if (!isInitialSeed && state.initialHistoryLoaded && normalized.sender === 'admin') {
+          hasNewAdminReply = true;
+        }
+      }
+
       if (
         !prev ||
         prev.read !== normalized.read ||
@@ -265,6 +348,12 @@
       state.messages = merged;
       saveLocalCache();
     }
+
+    if (hasNewAdminReply) {
+      setAdminTypingState(false);
+      playMessageReceivedBeep();
+    }
+
     return changed;
   }
 
@@ -336,7 +425,13 @@
       '.ca-chat-msg-image{max-width:210px!important;max-height:200px!important;border-radius:8px!important;display:block!important;margin-bottom:4px!important;}' +
       '.ca-chat-msg-meta{display:flex!important;align-items:center!important;gap:5px!important;margin-top:3px!important;font-size:10.5px!important;color:var(--text-tertiary,#71717a)!important;}' +
       '.ca-chat-msg-meta svg{width:12px!important;height:12px!important;display:inline-block!important;}' +
-      '.ca-chat-typing{display:flex!important;align-items:center!important;gap:8px!important;padding:6px 14px!important;font-size:11.5px!important;color:var(--text-secondary,#52525b)!important;background:var(--bg-secondary,#f4f4f5)!important;border-top:1px solid var(--border,#e4e4e7)!important;}' +
+      '.ca-chat-typing{display:none!important;align-items:center!important;gap:8px!important;padding:6px 14px!important;font-size:11.5px!important;color:var(--text-secondary,#52525b)!important;background:var(--bg-secondary,#f4f4f5)!important;border-top:1px solid var(--border,#e4e4e7)!important;flex-shrink:0!important;}' +
+      '.ca-chat-typing.is-typing{display:flex!important;}' +
+      '.ca-typing-dots{display:inline-flex!important;align-items:center!important;gap:3px!important;}' +
+      '.ca-typing-dots span{width:5px!important;height:5px!important;border-radius:50%!important;background:var(--text-secondary,#52525b)!important;display:inline-block!important;animation:caTypingBounce 1.2s infinite ease-in-out!important;}' +
+      '.ca-typing-dots span:nth-child(2){animation-delay:0.15s!important;}' +
+      '.ca-typing-dots span:nth-child(3){animation-delay:0.3s!important;}' +
+      '@keyframes caTypingBounce{0%,80%,100%{transform:scale(0.7);opacity:0.45;}40%{transform:scale(1.1);opacity:1;}}' +
       '.ca-chat-composer{display:flex!important;align-items:flex-end!important;gap:8px!important;padding:10px 12px!important;background:var(--bg-secondary,#f4f4f5)!important;border-top:1px solid var(--border,#e4e4e7)!important;flex-shrink:0!important;}' +
       '.ca-chat-attach-btn,.ca-chat-send-btn{width:34px!important;height:34px!important;min-width:34px!important;max-width:34px!important;border-radius:50%!important;border:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;cursor:pointer!important;padding:0!important;flex-shrink:0!important;}' +
       '.ca-chat-attach-btn{background:transparent!important;color:var(--text-secondary,#52525b)!important;}' +
@@ -394,7 +489,7 @@
             '</div>' +
             '<div class="ca-chat-header-meta">' +
               '<div class="ca-chat-header-title" data-i18n="chat.title">' + escapeHtml(tr('chat.title', 'Chitron Bhattacharjee')) + '</div>' +
-              '<div id="ca-chat-header-status" class="ca-chat-header-status">' + escapeHtml(tr('chat.subtitleOnline', 'Available • Replies in real-time')) + '</div>' +
+              '<div id="ca-chat-header-status" class="ca-chat-header-status">' + escapeHtml(formatAdminPresenceStatus()) + '</div>' +
             '</div>' +
           '</div>' +
           '<div class="ca-chat-header-actions">' +
@@ -490,6 +585,7 @@
 
   function bindEvents() {
     dom.fab.addEventListener('click', function () {
+      unlockAudioContext();
       if (state.isOpen) {
         closeChat();
       } else {
@@ -527,12 +623,17 @@
     });
 
     dom.input.addEventListener('input', function () {
+      unlockAudioContext();
       dom.input.style.height = 'auto';
       var nextHeight = Math.min(dom.input.scrollHeight, 100);
       dom.input.style.height = nextHeight + 'px';
       var hasText = dom.input.value.trim().length > 0;
       dom.sendBtn.disabled = !hasText || state.sending;
       notifyVisitorTyping(hasText);
+    });
+
+    dom.input.addEventListener('blur', function () {
+      notifyVisitorTyping(false);
     });
 
     dom.input.addEventListener('keydown', function (e) {
@@ -681,20 +782,70 @@
     if (dom.newPill) dom.newPill.style.display = 'none';
   }
 
+  function formatAdminPresenceStatus() {
+    if (state.connectionState === 'offline') {
+      return tr('chat.subtitleOffline', 'Offline • Messages saved locally');
+    }
+    var now = Date.now();
+    var lastSeen = Number(state.adminLastSeen) || 0;
+    var isOnlineNow = Boolean(state.adminOnline) && (!lastSeen || (now - lastSeen < 65000));
+    if (isOnlineNow) {
+      return 'Active now';
+    }
+    if (lastSeen > 0) {
+      var diffSec = Math.max(1, Math.floor((now - lastSeen) / 1000));
+      if (diffSec < 60) {
+        return 'Active 1 min ago';
+      }
+      var diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) {
+        return 'Active ' + diffMin + ' min ago';
+      }
+      var diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) {
+        return 'Active ' + diffHr + (diffHr === 1 ? ' hour ago' : ' hours ago');
+      }
+      var diffDays = Math.floor(diffHr / 24);
+      return 'Active ' + diffDays + (diffDays === 1 ? ' day ago' : ' days ago');
+    }
+    return 'Active recently';
+  }
+
+  function updateAdminPresenceState(presence) {
+    if (!presence || typeof presence !== 'object') return;
+    if (presence.adminLastSeen) {
+      state.adminLastSeen = Number(presence.adminLastSeen) || state.adminLastSeen;
+    }
+    if (presence.adminOnline !== undefined) {
+      state.adminOnline = Boolean(presence.adminOnline);
+    }
+    renderPresenceStatus();
+  }
+
+  function renderPresenceStatus() {
+    if (!dom.presenceDot || !dom.headerStatus) return;
+    if (state.connectionState === 'offline') {
+      dom.presenceDot.className = 'ca-chat-presence-dot offline';
+      dom.headerStatus.textContent = tr('chat.subtitleOffline', 'Offline • Messages saved locally');
+      return;
+    }
+    var now = Date.now();
+    var lastSeen = Number(state.adminLastSeen) || 0;
+    var isOnlineNow = Boolean(state.adminOnline) && (!lastSeen || (now - lastSeen < 65000));
+    dom.presenceDot.className = 'ca-chat-presence-dot ' + (isOnlineNow ? 'online' : 'reconnecting');
+    dom.headerStatus.textContent = formatAdminPresenceStatus();
+  }
+
   function setConnectionState(conn) {
     state.connectionState = conn;
     if (!dom.presenceDot || !dom.headerStatus) return;
 
-    dom.presenceDot.className = 'ca-chat-presence-dot ' + conn;
-    if (conn === 'online') {
-      dom.headerStatus.textContent = tr('chat.subtitleOnline', 'Available • Replies in real-time');
-      hideBanner();
-    } else if (conn === 'reconnecting') {
-      dom.headerStatus.textContent = tr('chat.subtitleReconnecting', 'Available • Live sync active');
-    } else {
-      dom.headerStatus.textContent = tr('chat.subtitleOffline', 'Offline • Messages saved locally');
+    if (conn === 'offline') {
       showBanner('You are currently offline. Messages will be sent once connection restores.', 'warning');
+    } else {
+      hideBanner();
     }
+    renderPresenceStatus();
   }
 
   function showBanner(msg, type) {
@@ -725,9 +876,15 @@
 
   function renderTypingIndicator() {
     if (!dom.typing) return;
-    dom.typing.style.display = state.adminTyping ? 'flex' : 'none';
-    if (state.adminTyping && state.isAtBottom) {
-      scrollToBottom(true);
+    if (state.adminTyping) {
+      dom.typing.classList.add('is-typing');
+      dom.typing.style.setProperty('display', 'flex', 'important');
+      if (state.isAtBottom) {
+        scrollToBottom(true);
+      }
+    } else {
+      dom.typing.classList.remove('is-typing');
+      dom.typing.style.setProperty('display', 'none', 'important');
     }
   }
 
@@ -843,6 +1000,7 @@
   }
 
   function renderAll() {
+    renderPresenceStatus();
     renderUnreadBadge();
     renderMessages();
     renderTypingIndicator();
@@ -865,6 +1023,7 @@
     dom.input.value = '';
     dom.input.style.height = 'auto';
     dom.sendBtn.disabled = true;
+    notifyVisitorTyping(false);
     hideBanner();
 
     await dispatchVisitorMessage({
@@ -1029,17 +1188,32 @@
   }
 
   async function loadConversationFromServer() {
+    var isFirstLoad = !state.initialHistoryLoaded;
     try {
       var data = await getApiClient().getVisitorConversation(state.visitorId);
       state.isLoading = false;
+      if (data && data.adminPresence) {
+        updateAdminPresenceState(data.adminPresence);
+      }
       if (data && data.conversation) {
         state.conversation = data.conversation;
         if (data.conversation.visitorName && !state.visitorName) {
           state.visitorName = data.conversation.visitorName;
         }
         state.unreadForVisitor = data.conversation.unreadForVisitor || 0;
-        mergeMessages(data.conversation.messages || []);
+        mergeMessages(data.conversation.messages || [], { isInitialSeed: isFirstLoad });
+        var isFreshTyping = Boolean(
+          data.conversation.adminTyping &&
+          data.conversation.adminTypingAt &&
+          (Date.now() - Number(data.conversation.adminTypingAt) < 4200)
+        );
+        if (isFreshTyping) {
+          setAdminTypingState(true);
+        } else if (!data.conversation.adminTyping) {
+          setAdminTypingState(false);
+        }
       }
+      state.initialHistoryLoaded = true;
       if (state.isOpen && (state.unreadForVisitor > 0 || hasUnreadAdminMessages())) {
         markVisitorMessagesRead();
       }
@@ -1047,6 +1221,7 @@
       renderAll();
     } catch (err) {
       state.isLoading = false;
+      state.initialHistoryLoaded = true;
       renderAll();
     }
   }
@@ -1094,30 +1269,80 @@
     } catch (e) {}
   }
 
-  function notifyVisitorTyping(isTyping) {
+  function sendVisitorTypingSignal(isTyping) {
+    var active = Boolean(isTyping);
+    state.visitorCurrentlyTyping = active;
     if (state.ws && state.ws.readyState === WebSocket.OPEN) {
       try {
-        state.ws.send(JSON.stringify({ type: 'typing:set', typing: Boolean(isTyping) }));
+        state.ws.send(JSON.stringify({ type: 'typing:set', typing: active }));
       } catch (e) {}
     }
+    try {
+      fetch('/api/chat/conversation/' + encodeURIComponent(state.visitorId) + '/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          typing: active,
+          visitorName: state.visitorName,
+          pageUrl: window.location.pathname
+        })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function notifyVisitorTyping(isTyping) {
+    clearTimeout(state.visitorTypingStopTimer);
+    if (!isTyping) {
+      if (state.visitorCurrentlyTyping) {
+        sendVisitorTypingSignal(false);
+      }
+      return;
+    }
+    var now = Date.now();
+    if (!state.visitorCurrentlyTyping || now - state.lastVisitorTypingSentAt > 1500) {
+      state.lastVisitorTypingSentAt = now;
+      sendVisitorTypingSignal(true);
+    }
+    state.visitorTypingStopTimer = setTimeout(function () {
+      sendVisitorTypingSignal(false);
+    }, 2500);
   }
 
   function handleRealtimeEvent(payload) {
     if (!payload || !payload.type) return;
 
     if (payload.type === 'conversation:init' && payload.conversation) {
+      var isFirstInit = !state.initialHistoryLoaded;
       state.isLoading = false;
-      mergeMessages(payload.conversation.messages || []);
+      if (payload.adminPresence) {
+        updateAdminPresenceState(payload.adminPresence);
+      }
+      mergeMessages(payload.conversation.messages || [], { isInitialSeed: isFirstInit });
+      state.initialHistoryLoaded = true;
       state.unreadForVisitor = payload.conversation.unreadForVisitor || 0;
       renderAll();
       return;
     }
 
+    if (payload.type === 'admin:presence') {
+      updateAdminPresenceState({
+        adminOnline: payload.adminOnline,
+        adminLastSeen: payload.adminLastSeen
+      });
+      return;
+    }
+
     if ((payload.type === 'message:created' || payload.type === 'message') && payload.message) {
       var msg = payload.message;
-      var changed = mergeMessages([msg]);
+      var wasAlreadyNotified = Boolean(state.notifiedMsgIds[msg.messageId]);
+      var changed = mergeMessages([msg], { isInitialSeed: false });
       if (msg.sender === 'admin') {
-        state.adminTyping = false;
+        updateAdminPresenceState({ adminOnline: true, adminLastSeen: Date.now() });
+        setAdminTypingState(false);
+        if (!wasAlreadyNotified) {
+          state.notifiedMsgIds[msg.messageId] = true;
+          playMessageReceivedBeep();
+        }
         if (state.isOpen) {
           markVisitorMessagesRead();
         } else {
@@ -1143,15 +1368,11 @@
         }
       }
     } else if ((payload.type === 'typing:update' || payload.type === 'typing') && payload.sender === 'admin') {
-      state.adminTyping = Boolean(payload.typing !== undefined ? payload.typing : payload.isTyping);
-      renderTypingIndicator();
-      clearTimeout(state.typingTimeout);
-      if (state.adminTyping) {
-        state.typingTimeout = setTimeout(function () {
-          state.adminTyping = false;
-          renderTypingIndicator();
-        }, 5000);
+      var isTyp = Boolean(payload.typing !== undefined ? payload.typing : payload.isTyping);
+      if (isTyp) {
+        updateAdminPresenceState({ adminOnline: true, adminLastSeen: Date.now() });
       }
+      setAdminTypingState(isTyp);
     }
   }
 
@@ -1161,9 +1382,69 @@
       if (!cfg || !cfg.apiKey || !cfg.projectId) return;
 
       var fbAppMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js');
-      var fbFirestoreMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
-
       var app = fbAppMod.getApps().length ? fbAppMod.getApp() : fbAppMod.initializeApp(cfg);
+
+      // 1. Firebase Realtime Database Listener (Primary low-latency live typing + messages)
+      if (cfg.databaseURL) {
+        try {
+          var fbRtdbMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js');
+          var rtdb = fbRtdbMod.getDatabase(app, cfg.databaseURL);
+          state.fbRtdb = { db: rtdb, mod: fbRtdbMod };
+
+          // Listen to Admin Presence in RTDB
+          var rtdbPresenceRef = fbRtdbMod.ref(rtdb, 'presence/admin');
+          fbRtdbMod.onValue(
+            rtdbPresenceRef,
+            function (pSnap) {
+              var pData = pSnap.val();
+              if (pData && typeof pData === 'object') {
+                updateAdminPresenceState(pData);
+              }
+            },
+            function () {}
+          );
+
+          var rtdbConvRef = fbRtdbMod.ref(rtdb, 'conversations/' + state.visitorId);
+          var firstRtdbSnap = true;
+          state.fbUnsubRtdb = fbRtdbMod.onValue(
+            rtdbConvRef,
+            function (snap) {
+              var data = snap.val();
+              if (!data) {
+                firstRtdbSnap = false;
+                return;
+              }
+              var isTypingNow = Boolean(
+                data.adminTyping &&
+                data.adminTypingAt &&
+                (Date.now() - Number(data.adminTypingAt) < 4200)
+              );
+              setAdminTypingState(isTypingNow);
+
+              if (!state.isOpen && typeof data.unreadForVisitor === 'number') {
+                state.unreadForVisitor = data.unreadForVisitor;
+                renderUnreadBadge();
+              }
+
+              if (Array.isArray(data.messages) && data.messages.length > 0) {
+                var changed = mergeMessages(data.messages, { isInitialSeed: firstRtdbSnap && !state.initialHistoryLoaded });
+                state.initialHistoryLoaded = true;
+                if (changed) {
+                  if (state.isOpen && hasUnreadAdminMessages()) {
+                    markVisitorMessagesRead();
+                  }
+                  renderAll();
+                }
+              }
+              firstRtdbSnap = false;
+            },
+            function () {}
+          );
+        } catch (rtdbErr) {}
+      }
+
+      // 2. Firestore Listener (Secondary sync)
+      var fbFirestoreMod = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
       var db = cfg.firestoreDatabaseId
         ? fbFirestoreMod.getFirestore(app, cfg.firestoreDatabaseId)
         : fbFirestoreMod.getFirestore(app);
@@ -1176,17 +1457,26 @@
           if (!snap.exists()) return;
           var data = snap.data();
           if (!data) return;
-          state.adminTyping = Boolean(data.adminTyping);
+          var isTypingNow = Boolean(
+            data.adminTyping &&
+            data.adminTypingAt &&
+            (Date.now() - Number(data.adminTypingAt) < 4200)
+          );
+          if (isTypingNow) {
+            setAdminTypingState(true);
+          } else if (data.adminTyping === false) {
+            setAdminTypingState(false);
+          }
           if (!state.isOpen && typeof data.unreadForVisitor === 'number') {
             state.unreadForVisitor = data.unreadForVisitor;
           }
           renderUnreadBadge();
-          renderTypingIndicator();
         },
         function () {}
       );
 
       var msgsRef = fbFirestoreMod.collection(db, 'conversations', state.visitorId, 'messages');
+      var firstFsSnap = true;
       state.fbUnsubMsgs = fbFirestoreMod.onSnapshot(
         msgsRef,
         function (querySnap) {
@@ -1195,7 +1485,8 @@
             incoming.push(docSnap.data());
           });
           if (incoming.length > 0) {
-            var changed = mergeMessages(incoming);
+            var changed = mergeMessages(incoming, { isInitialSeed: firstFsSnap && !state.initialHistoryLoaded });
+            state.initialHistoryLoaded = true;
             if (changed) {
               if (state.isOpen && hasUnreadAdminMessages()) {
                 markVisitorMessagesRead();
@@ -1203,6 +1494,7 @@
               renderAll();
             }
           }
+          firstFsSnap = false;
         },
         function () {}
       );
@@ -1256,6 +1548,7 @@
     } catch (e) {}
 
     state.pollTimer = setInterval(function () {
+      renderPresenceStatus();
       if (document.visibilityState === 'visible') {
         loadConversationFromServer();
       }

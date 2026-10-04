@@ -189,6 +189,18 @@
     "/conversations/{visitorId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Subcollection of chronological messages belonging to a conversation."
+    },
+    "/posts/{postId}": {
+      "schema": { "type": "object", "title": "Post", "description": "Published or draft blog article synced across production and preview." },
+      "description": "Blog articles collection."
+    },
+    "/gallery/{photoId}": {
+      "schema": { "type": "object", "title": "GalleryPhoto", "description": "Photography gallery item synced across production and preview." },
+      "description": "Photo gallery collection."
+    },
+    "/cms/{docId}": {
+      "schema": { "type": "object", "title": "CmsDoc", "description": "Site content and configuration documents (about, homepage, settings)." },
+      "description": "CMS configuration collection."
     }
   }
 }
