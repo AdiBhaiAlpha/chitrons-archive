@@ -83,6 +83,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'chitrons-archive-session-s
 const MONGODB_URI = process.env.MONGODB_URI || '';
 
 const app = express();
+const staticRoot = path.resolve(__dirname);
 
 // High-performance gzip & brotli compression for all text responses
 app.use(compression());
@@ -2916,6 +2917,21 @@ app.get('/writing.html', (req, res) => res.redirect(301, '/writing'));
 app.get('/gallery.html', (req, res) => res.redirect(301, '/gallery'));
 app.get('/admin.html', (req, res) => res.redirect(301, '/admin/'));
 
+app.get(['/admin', '/admin/'], (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(staticRoot, 'admin', 'index.html'));
+});
+
+app.get(['/api', '/api/'], (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json({
+    status: 'online',
+    app: "Chitron's Archive",
+    time: new Date().toISOString()
+  });
+});
+
 app.get('/about', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=UTF-8');
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
@@ -3130,7 +3146,6 @@ app.get('/feed.xml', async (req, res) => {
 });
 
 /* --- Static Files Serving with Optimized Caching & LCP Preload --- */
-const staticRoot = path.resolve(__dirname);
 
 // High-speed homepage handler with server-side LCP image preload injection
 app.get(['/', '/index.html'], async (req, res, next) => {
@@ -3387,7 +3402,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-if (require.main === module || !process.env.VERCEL) {
+if (require.main === module) {
   server.listen(PORT, HOST, () => {
     console.log(`Chitrons Archive server running on http://${HOST}:${PORT}`);
     console.log(`Admin PIN configured: ${ADMIN_PIN ? 'Yes' : 'No'}`);

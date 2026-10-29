@@ -3,3 +3,5 @@ backend/node_modules/
 .DS_Store
 *.log
 uploads/
+public/
+.vercel/

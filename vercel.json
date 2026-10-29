@@ -1,57 +1,16 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": false,
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": "{css/**,js/**,images/**,fonts/**,admin/**,*.html,*.xml,*.txt,*.webmanifest,*.ico,*.png,*.jpg,*.webp,firebase-applet-config.json,database.rules.json}"
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
-    },
-    {
-      "source": "/post/(.*)",
-      "destination": "/api/index.js"
-    },
-    {
-      "source": "/post",
-      "destination": "/api/index.js"
-    },
-    {
-      "source": "/writing",
-      "destination": "/writing.html"
-    },
-    {
-      "source": "/about",
-      "destination": "/about.html"
-    },
-    {
-      "source": "/gallery",
-      "destination": "/gallery.html"
-    },
-    {
-      "source": "/admin",
-      "destination": "/admin/index.html"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/admin/$1"
-    },
-    {
-      "source": "/sitemap.xml",
-      "destination": "/api/index.js"
-    },
-    {
-      "source": "/feed.xml",
-      "destination": "/api/index.js"
-    },
-    {
-      "source": "/robots.txt",
-      "destination": "/api/index.js"
+      "source": "/(.*)",
+      "destination": "/api"
     }
   ],
   "headers": [
