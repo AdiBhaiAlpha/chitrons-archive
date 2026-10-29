@@ -102,15 +102,30 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-/* --- Uploads Storage & Multer --- */
-const uploadsDir = path.join(__dirname, 'uploads', 'gallery');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+/* --- Uploads Storage & Multer (with Vercel Serverless /tmp fallback) --- */
+function getSafeStorageDir(subDir) {
+  const local = path.join(__dirname, 'uploads', subDir);
+  try {
+    if (!fs.existsSync(local)) {
+      fs.mkdirSync(local, { recursive: true });
+    }
+    return local;
+  } catch (e) {
+    const tmp = path.join('/tmp', 'uploads', subDir);
+    try {
+      if (!fs.existsSync(tmp)) {
+        fs.mkdirSync(tmp, { recursive: true });
+      }
+    } catch (err) {}
+    return tmp;
+  }
 }
+
+const uploadsDir = getSafeStorageDir('gallery');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadsDir);
+    cb(null, getSafeStorageDir('gallery'));
   },
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname) || '.jpg').toLowerCase();
@@ -133,38 +148,66 @@ const upload = multer({
 });
 
 /* --- Image Optimization & Static Serving --- */
-const imageCacheDir = path.join(__dirname, 'uploads', 'cache');
-if (!fs.existsSync(imageCacheDir)) {
-  fs.mkdirSync(imageCacheDir, { recursive: true });
-}
+const imageCacheDir = getSafeStorageDir('cache');
 
 // Automatic WebP content negotiation and cross-instance upload sync for /uploads/*
 app.use('/uploads', async (req, res, next) => {
   try {
     const requestedRel = decodeURIComponent(req.path).replace(/^\/+/, '');
     const localFile = path.join(__dirname, 'uploads', requestedRel);
-    if (!fs.existsSync(localFile) && requestedRel.startsWith('featured-images/')) {
-      const remoteUrl = `https://chitron.iam.bd/uploads/${req.path.replace(/^\/+/, '')}`;
-      const remoteRes = await fetch(remoteUrl).catch(() => null);
-      if (remoteRes && remoteRes.ok) {
-        const buf = Buffer.from(await remoteRes.arrayBuffer());
-        fs.mkdirSync(path.dirname(localFile), { recursive: true });
-        fs.writeFileSync(localFile, buf);
+    const tmpFile = path.join('/tmp', 'uploads', requestedRel);
+    let targetFile = fs.existsSync(localFile) ? localFile : (fs.existsSync(tmpFile) ? tmpFile : null);
+
+    if (!targetFile && requestedRel.startsWith('featured-images/')) {
+      const currentHost = (req.get('host') || '').toLowerCase();
+      if (!currentHost.includes('chitron.iam.bd')) {
+        const remoteUrl = `https://chitron.iam.bd/uploads/${requestedRel}`;
+        const remoteRes = await fetch(remoteUrl).catch(() => null);
+        if (remoteRes && remoteRes.ok) {
+          const buf = Buffer.from(await remoteRes.arrayBuffer());
+          let savedFile = null;
+          try {
+            fs.mkdirSync(path.dirname(localFile), { recursive: true });
+            fs.writeFileSync(localFile, buf);
+            savedFile = localFile;
+          } catch (wErr) {
+            try {
+              fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
+              fs.writeFileSync(tmpFile, buf);
+              savedFile = tmpFile;
+            } catch (wErr2) {}
+          }
+          if (savedFile) targetFile = savedFile;
+        }
       }
     }
-    if (req.path.endsWith('.jpg') && req.headers.accept && req.headers.accept.includes('image/webp')) {
-      const webpPath = localFile.replace(/\.jpg$/, '.webp');
-      if (fs.existsSync(webpPath)) {
-        res.setHeader('Content-Type', 'image/webp');
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        return res.sendFile(webpPath);
+
+    if (targetFile) {
+      if (req.path.endsWith('.jpg') && req.headers.accept && req.headers.accept.includes('image/webp')) {
+        const webpPath = targetFile.replace(/\.jpg$/, '.webp');
+        if (fs.existsSync(webpPath)) {
+          res.setHeader('Content-Type', 'image/webp');
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.sendFile(webpPath);
+        }
       }
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=604800');
+      return res.sendFile(targetFile);
     }
   } catch (e) {}
   next();
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '30d',
+  setHeaders: (res, filePath) => {
+    if (filePath.match(/\.(webp|jpg|jpeg|png|svg)$/i)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=604800');
+    }
+  }
+}));
+
+app.use('/uploads', express.static('/tmp/uploads', {
   maxAge: '30d',
   setHeaders: (res, filePath) => {
     if (filePath.match(/\.(webp|jpg|jpeg|png|svg)$/i)) {
@@ -2148,13 +2191,10 @@ app.post('/api/admin/gallery/:id/unpublish', authMiddleware, async (req, res) =>
    (Firebase Firestore / RTDB + MongoDB Atlas + WebSockets)
    ========================================================= */
 
-const chatUploadsDir = path.join(__dirname, 'uploads', 'chat');
-if (!fs.existsSync(chatUploadsDir)) {
-  fs.mkdirSync(chatUploadsDir, { recursive: true });
-}
+const chatUploadsDir = getSafeStorageDir('chat');
 
 const chatUploadStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, chatUploadsDir),
+  destination: (req, file, cb) => cb(null, getSafeStorageDir('chat')),
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname) || '.bin').toLowerCase();
     const cleanName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
@@ -2866,7 +2906,7 @@ app.get('/robots.txt', (req, res) => {
     res.sendFile(robotsPath);
   } else {
     res.header('Content-Type', 'text/plain');
-    res.send(`User-agent: *\nAllow: /\nAllow: /about\nAllow: /writing\nAllow: /gallery\nAllow: /post/\nAllow: /sitemap.xml\nAllow: /feed.xml\nAllow: /uploads/\nAllow: /images/\n\nDisallow: /admin\nDisallow: /admin/\nDisallow: /admin.html\nDisallow: /api/admin/\nDisallow: /api/auth/\n\nSitemap: https://chitron.iam.bd/sitemap.xml\nSitemap: https://chitronsarchive.org/sitemap.xml\n`);
+    res.send(`User-agent: *\nAllow: /\nAllow: /about\nAllow: /writing\nAllow: /gallery\nAllow: /post/\nAllow: /sitemap.xml\nAllow: /feed.xml\nAllow: /uploads/\nAllow: /images/\n\nDisallow: /admin\nDisallow: /admin/\nDisallow: /admin.html\nDisallow: /api/admin/\nDisallow: /api/auth/\n\nSitemap: https://chitron.iam.bd/sitemap.xml\n`);
   }
 });
 
@@ -2874,6 +2914,7 @@ app.get('/robots.txt', (req, res) => {
 app.get('/about.html', (req, res) => res.redirect(301, '/about'));
 app.get('/writing.html', (req, res) => res.redirect(301, '/writing'));
 app.get('/gallery.html', (req, res) => res.redirect(301, '/gallery'));
+app.get('/admin.html', (req, res) => res.redirect(301, '/admin/'));
 
 app.get('/about', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=UTF-8');
@@ -3015,6 +3056,7 @@ async function servePostHtmlWithSeo(req, res) {
 }
 
 app.get('/post.html', servePostHtmlWithSeo);
+app.get('/post', servePostHtmlWithSeo);
 app.get('/post/:slug', servePostHtmlWithSeo);
 
 app.get('/sitemap.xml', async (req, res) => {
@@ -3345,7 +3387,11 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Chitrons Archive server running on http://${HOST}:${PORT}`);
-  console.log(`Admin PIN configured: ${ADMIN_PIN ? 'Yes' : 'No'}`);
-});
+if (require.main === module || !process.env.VERCEL) {
+  server.listen(PORT, HOST, () => {
+    console.log(`Chitrons Archive server running on http://${HOST}:${PORT}`);
+    console.log(`Admin PIN configured: ${ADMIN_PIN ? 'Yes' : 'No'}`);
+  });
+}
+
+module.exports = app;

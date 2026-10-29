@@ -14,15 +14,32 @@ try {
   // GenAI package optional
 }
 
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'featured-images');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+function getSafeUploadsDir() {
+  const local = path.join(__dirname, '..', 'uploads', 'featured-images');
+  try {
+    if (!fs.existsSync(local)) {
+      fs.mkdirSync(local, { recursive: true });
+    }
+    return local;
+  } catch (e) {
+    const tmp = path.join('/tmp', 'uploads', 'featured-images');
+    try {
+      if (!fs.existsSync(tmp)) {
+        fs.mkdirSync(tmp, { recursive: true });
+      }
+    } catch (err) {}
+    return tmp;
+  }
 }
 
+const UPLOADS_DIR = getSafeUploadsDir();
+
 const FONTS_DIR = path.join(__dirname, 'fonts');
-if (!fs.existsSync(FONTS_DIR)) {
-  fs.mkdirSync(FONTS_DIR, { recursive: true });
-}
+try {
+  if (!fs.existsSync(FONTS_DIR)) {
+    fs.mkdirSync(FONTS_DIR, { recursive: true });
+  }
+} catch (e) {}
 
 // Register Kalpurush and Noto Serif Bengali fonts in @napi-rs/canvas for Skia/HarfBuzz Bengali conjunct shaping
 const kalpurushFontPath = path.join(FONTS_DIR, 'Kalpurush.ttf');
@@ -706,7 +723,8 @@ async function createFeaturedImage(stockPhotoObj, title, author = 'Chitron Bhatt
     .slice(0, 40) || 'post';
 
   const filename = `featured-${safeSlug}-${Date.now()}.jpg`;
-  const outputPath = path.join(UPLOADS_DIR, filename);
+  const targetDir = getSafeUploadsDir();
+  const outputPath = path.join(targetDir, filename);
 
   await sharp(resizedBaseBuffer)
     .composite([{ input: overlayBuffer, top: 0, left: 0 }])

@@ -21,5 +21,4 @@ Disallow: /api/auth/
 
 # XML Sitemap Locations
 Sitemap: https://chitron.iam.bd/sitemap.xml
-Sitemap: https://chitronsarchive.org/sitemap.xml
 
